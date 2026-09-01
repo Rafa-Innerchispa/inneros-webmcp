@@ -1,3 +1,5 @@
+import { adapterConfigured, callInnerOS } from './inneros-adapter.js';
+
 const AGENTS = Object.freeze([
   { id: 'codex', label: 'Codex', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
   { id: 'cursor', label: 'Cursor', transport: 'remote inbox', capability: 'IDE delivery', verification: 'no fake headless' },
@@ -17,28 +19,39 @@ function unavailable(tool, detail = 'Judge-safe InnerOS runtime adapter is not c
   return { ok: false, state: 'unavailable', tool, detail, source: 'inneros-webmcp-bridge' };
 }
 
+async function liveOrUnavailable(tool, input, fallbackDetail) {
+  if (!adapterConfigured()) return unavailable(tool, fallbackDetail);
+  return callInnerOS(tool, input);
+}
+
 export function getPolicy() {
   return {
     agents: AGENTS,
     actions: ALLOWED_ACTIONS,
     executionPolicy: 'local_first',
+    adapterConfigured: adapterConfigured(),
     writesRequireBridge: true,
     truthRule: 'configured capability is never presented as running execution'
   };
 }
 
 export async function invokeTool(name, input = {}) {
-  if (name === 'list_agents') return { ok: true, state: 'ready', agents: AGENTS };
+  if (name === 'list_agents') {
+    if (adapterConfigured()) return callInnerOS(name, {});
+    return { ok: true, state: 'ready', agents: AGENTS, live: false };
+  }
 
   if (name === 'get_project_status') {
     const project = safeText(input.project, 120);
     if (!project) return { ok: false, state: 'rejected', error: 'project_required' };
-    return unavailable(name, `No judge-safe live project adapter is connected for ${project}.`);
+    return liveOrUnavailable(name, { project }, `No judge-safe live project adapter is connected for ${project}.`);
   }
 
   if (name === 'inspect_blockers') {
-    if (!safeText(input.project, 120) && !safeText(input.taskId, 160)) return { ok: false, state: 'rejected', error: 'project_or_task_required' };
-    return unavailable(name);
+    const project = safeText(input.project, 120);
+    const taskId = safeText(input.taskId, 160);
+    if (!project && !taskId) return { ok: false, state: 'rejected', error: 'project_or_task_required' };
+    return liveOrUnavailable(name, { project, taskId }, 'No judge-safe live blocker adapter is connected.');
   }
 
   if (name === 'resolve_project_blocker') {
@@ -46,12 +59,15 @@ export async function invokeTool(name, input = {}) {
     if (!project) return { ok: false, state: 'rejected', error: 'project_required' };
     const policy = safeText(input.policy, 40) || 'local_first';
     if (!['local_first','best_available'].includes(policy)) return { ok: false, state: 'rejected', error: 'policy_not_allowlisted' };
+    const instruction = safeText(input.instruction, 2000) || 'Diagnose the current blocker and resolve it safely.';
+    if (adapterConfigured()) return callInnerOS(name, { project, policy, instruction });
+
     const dispatchId = `wmcp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const record = {
       dispatchId,
       agent: null,
       project,
-      instruction: safeText(input.instruction, 2000) || 'Diagnose the current blocker and resolve it safely.',
+      instruction,
       policy,
       state: 'blocked',
       blocker: 'judge_safe_inneros_adapter_not_connected',
@@ -71,17 +87,16 @@ export async function invokeTool(name, input = {}) {
   if (name === 'dispatch_agent_action') {
     const agent = safeText(input.agent, 40).toLowerCase();
     const instruction = safeText(input.instruction, 2000);
+    const project = safeText(input.project, 120) || null;
+    const taskId = safeText(input.taskId, 160) || null;
     if (!ALLOWED_AGENTS.includes(agent)) return { ok: false, state: 'rejected', error: 'agent_not_allowlisted' };
     if (!instruction) return { ok: false, state: 'rejected', error: 'instruction_required' };
+    if (adapterConfigured()) return callInnerOS(name, { agent, project, taskId, instruction });
+
     const dispatchId = `wmcp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const record = {
-      dispatchId,
-      agent,
-      project: safeText(input.project, 120) || null,
-      taskId: safeText(input.taskId, 160) || null,
-      instruction,
-      state: 'blocked',
-      blocker: 'judge_safe_inneros_adapter_not_connected',
+      dispatchId, agent, project, taskId, instruction,
+      state: 'blocked', blocker: 'judge_safe_inneros_adapter_not_connected',
       createdAt: new Date().toISOString(),
       trace: [{ stage: 'dispatch', state: 'blocked', detail: 'No external execution claimed without a live adapter.' }],
       evidence: []
@@ -91,18 +106,22 @@ export async function invokeTool(name, input = {}) {
   }
 
   if (name === 'get_execution_trace') {
-    const id = safeText(input.dispatchId, 200);
-    const record = dispatches.get(id);
+    const dispatchId = safeText(input.dispatchId, 200);
+    if (!dispatchId) return { ok: false, state: 'rejected', error: 'dispatch_required' };
+    if (adapterConfigured()) return callInnerOS(name, { dispatchId });
+    const record = dispatches.get(dispatchId);
     if (!record) return { ok: false, state: 'not_found', error: 'dispatch_not_found' };
-    return { ok: true, state: record.state, dispatchId: id, trace: record.trace || [] };
+    return { ok: true, state: record.state, dispatchId, trace: record.trace || [] };
   }
 
   if (name === 'get_evidence') {
-    const id = safeText(input.dispatchId, 200);
-    if (id) {
-      const record = dispatches.get(id);
+    const dispatchId = safeText(input.dispatchId, 200);
+    const taskId = safeText(input.taskId, 160);
+    if (adapterConfigured()) return callInnerOS(name, { dispatchId, taskId });
+    if (dispatchId) {
+      const record = dispatches.get(dispatchId);
       if (!record) return { ok: false, state: 'not_found', error: 'dispatch_not_found' };
-      return { ok: true, dispatchId: id, evidence: record.evidence, state: record.state };
+      return { ok: true, dispatchId, evidence: record.evidence, state: record.state };
     }
     return unavailable(name);
   }
