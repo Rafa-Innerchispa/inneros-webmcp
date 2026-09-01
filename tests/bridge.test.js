@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { invokeTool, ALLOWED_AGENTS, ALLOWED_ACTIONS } from '../src/bridge.js';
 import { TOOL_NAMES, registerInnerOSWebMCP } from '../src/webmcp.js';
+import { resolveAdapterUrls } from '../src/inneros-adapter.js';
 
 test('registers all WebMCP tools when browser API exists', () => {
   const seen = [];
@@ -20,6 +21,18 @@ test('unsupported browser is explicit', () => {
 test('policy remains narrow', () => {
   assert.deepEqual(ALLOWED_AGENTS, ['codex','cursor','antigravity','local']);
   assert.deepEqual(ALLOWED_ACTIONS, ['inspect','dispatch','status','evidence','resolve']);
+});
+
+test('adapter endpoint resolution is ordered deduplicated and failover-ready', () => {
+  assert.deepEqual(resolveAdapterUrls({
+    INNEROS_ADAPTER_URLS: 'https://primary.example, https://secondary.example/',
+    INNEROS_ADAPTER_URL: 'https://primary.example/',
+    INNEROS_ADAPTER_FALLBACK_URL: 'https://tertiary.example/'
+  }), [
+    'https://primary.example',
+    'https://secondary.example',
+    'https://tertiary.example'
+  ]);
 });
 
 test('rejects non-allowlisted agent', async () => {
