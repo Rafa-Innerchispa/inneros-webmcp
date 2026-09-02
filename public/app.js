@@ -3,6 +3,14 @@ import { installBrowserWebMCP } from '/webmcp.js';
 const $ = (id) => document.getElementById(id);
 const traceEl = $('trace');
 const resultEl = $('result');
+const FLOW_IDS = ['archHuman', 'archWebmcp', 'archBridge', 'archMcp', 'archExecutor', 'archEvidence'];
+const LANE_DEFAULTS = [
+  { id: 'local', label: 'Local AMD', transport: 'vLLM + durable A2A', capability: 'Qwen3-Coder + local execution', verification: 'runtime health is verified separately' },
+  { id: 'codex', label: 'Codex', transport: 'verified adapter', capability: 'coding execution lane', verification: 'process evidence required' },
+  { id: 'cursor', label: 'Cursor', transport: 'native ACP', capability: 'IDE coding agent', verification: 'ACP lifecycle evidence' },
+  { id: 'antigravity', label: 'AntiGravity', transport: 'IDE / headless bridge', capability: 'coding task lane', verification: 'session evidence required' }
+];
+
 let lastDispatchId = '';
 let lastCopilotPrompt = '';
 let lastExecutionBrief = '';
@@ -19,11 +27,28 @@ function short(value, max = 110) {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-function markArch(id, state = 'verified') {
-  const el = $(id);
-  if (!el) return;
-  el.classList.remove('verified', 'active');
-  if (state) el.classList.add(state);
+function setFlowStage(id, { confirmed = false, degraded = false } = {}) {
+  const target = FLOW_IDS.indexOf(id);
+  if (target < 0) return;
+  FLOW_IDS.forEach((flowId, index) => {
+    const el = $(flowId);
+    if (!el) return;
+    el.classList.remove('active', 'degraded');
+    if (index < target) el.classList.add('verified');
+    if (index === target) {
+      el.classList.toggle('verified', confirmed && !degraded);
+      el.classList.toggle('degraded', degraded);
+      el.classList.add('active');
+    }
+  });
+  document.querySelectorAll('.arch-link').forEach((link, index) => {
+    link.classList.toggle('flowing', index === target - 1 || (target === 0 && index === 0));
+  });
+}
+
+function settleFlow() {
+  FLOW_IDS.forEach((id) => $(id)?.classList.remove('active'));
+  document.querySelectorAll('.arch-link').forEach((link) => link.classList.remove('flowing'));
 }
 
 function addTrace(event) {
@@ -47,7 +72,7 @@ function addTrace(event) {
   head.append(title, source);
 
   const detail = document.createElement('p');
-  detail.textContent = short(event.detail || '', 300);
+  detail.textContent = short(event.detail || '', 320);
   body.append(head, detail);
 
   const metaValues = [
@@ -98,7 +123,23 @@ function renderReturnedTrace(data) {
   }
 }
 
+function requestFlowStage(name) {
+  if (name === 'get_execution_trace' || name === 'get_evidence') return 'archEvidence';
+  if (name === 'dispatch_agent_action' || name === 'resolve_project_blocker') return 'archMcp';
+  return 'archWebmcp';
+}
+
+function responseFlowStage(name, data) {
+  if (name === 'get_execution_trace' || name === 'get_evidence') return 'archEvidence';
+  if (name === 'dispatch_agent_action' || name === 'resolve_project_blocker') return data?.dispatchId ? 'archExecutor' : 'archMcp';
+  if (name === 'ask_inneros_copilot') return 'archBridge';
+  return 'archBridge';
+}
+
 async function invoke(name, input = {}, { trace = true } = {}) {
+  const requestStage = requestFlowStage(name);
+  setFlowStage(requestStage);
+
   if (trace) {
     addTrace({
       title: `Tool request · ${name}`,
@@ -121,6 +162,8 @@ async function invoke(name, input = {}, { trace = true } = {}) {
   catch { data = { ok: false, state: 'error', error: 'invalid_backend_json' }; }
 
   const proof = updateProof(data, response, clientLatencyMs);
+  setFlowStage(responseFlowStage(name, data), { confirmed: Boolean(data?.ok), degraded: !data?.ok });
+
   if (trace) {
     addTrace({
       title: `${name} · ${data.state || (data.ok ? 'ok' : 'error')}`,
@@ -135,6 +178,7 @@ async function invoke(name, input = {}, { trace = true } = {}) {
     });
   }
   renderReturnedTrace(data);
+  window.setTimeout(settleFlow, 900);
   return data;
 }
 
@@ -152,33 +196,61 @@ function bubble(role, label, message) {
   return article;
 }
 
+function mergedLanes(data) {
+  const live = new Map((Array.isArray(data?.agents) ? data.agents : []).map((agent) => [agent.id, agent]));
+  return LANE_DEFAULTS.map((fallback) => ({ ...fallback, ...(live.get(fallback.id) || {}) }));
+}
+
+function laneState(agent, returnedByBackend) {
+  if (!returnedByBackend) return { label: 'DISCOVERING', className: 'unknown' };
+  if (agent.ready === false) return { label: 'DEGRADED', className: 'off' };
+  if (agent.ready === true) return { label: 'AVAILABLE', className: 'ready' };
+  return { label: 'CONFIGURED', className: 'unknown' };
+}
+
 function renderAgents(data) {
-  const agents = Array.isArray(data?.agents) ? data.agents : [];
+  const backendIds = new Set((Array.isArray(data?.agents) ? data.agents : []).map((agent) => agent.id));
+  const agents = mergedLanes(data);
   $('agents').replaceChildren(...agents.map((agent) => {
+    const state = laneState(agent, backendIds.has(agent.id));
     const card = document.createElement('article');
     card.dataset.agent = agent.id || '';
+    card.classList.add(`lane-${state.className}`);
+
     const dot = document.createElement('span');
-    dot.className = `dot ${agent.ready === false ? 'off' : ''}`;
+    dot.className = `dot ${state.className === 'off' ? 'off' : state.className === 'unknown' ? 'unknown' : ''}`;
+
     const text = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'lane-title';
     const strong = document.createElement('strong');
     strong.textContent = agent.label || agent.id || 'Agent';
+    const chip = document.createElement('span');
+    chip.className = `lane-state ${state.className}`;
+    chip.textContent = state.label;
+    header.append(strong, chip);
+
     const small = document.createElement('small');
     const parts = [agent.transport, agent.capability, agent.cost, agent.verification].filter(Boolean);
     small.textContent = parts.join(' · ') || 'Backend-reported capability';
-    text.append(strong, small);
+    text.append(header, small);
     card.append(dot, text);
+
     if (agent.id) {
       card.addEventListener('click', () => {
         $('executorTarget').value = agent.id;
         document.querySelectorAll('#agents article').forEach((el) => el.classList.toggle('selected', el === card));
+        setFlowStage('archExecutor');
+        addTrace({ title: `Execution lane selected · ${agent.label}`, detail: `Target set to ${agent.id}. This does not claim execution.`, state: 'info', source: 'BROWSER', confirmed: false });
+        window.setTimeout(settleFlow, 700);
       });
     }
     return card;
   }));
-  $('fabricState').textContent = data?.live ? 'Live fabric confirmed' : 'Configured lanes only';
+  $('fabricState').textContent = data?.live ? 'Live fabric confirmed' : 'Provider discovery partial';
   if (data?.live) {
-    markArch('archMcp', 'verified');
-    markArch('archExecutor', 'verified');
+    $('archMcp')?.classList.add('verified');
+    $('archExecutor')?.classList.add('verified');
   }
 }
 
@@ -190,35 +262,36 @@ function renderMission(data, target = 'auto') {
   const model = [route.model, route.runtime].filter(Boolean).join(' · ');
   $('selectedModel').textContent = model || (resource === 'local' || target === 'local' ? 'Qwen3-Coder / A2A' : 'Provider runtime');
   $('missionState').textContent = data?.state || 'unknown';
-  $('evidenceState').textContent = ['completed','pass'].includes(data?.state) ? 'Verified' : 'Pending verification';
+  $('evidenceState').textContent = ['completed', 'pass'].includes(String(data?.state).toLowerCase()) ? 'Verified' : 'Pending verification';
   lastDispatchId = data?.dispatchId || '';
   $('dispatchId').textContent = lastDispatchId || 'No dispatch returned';
   $('proofDispatch').textContent = lastDispatchId || 'None';
   $('refreshEvidence').hidden = !lastDispatchId;
   resultEl.textContent = JSON.stringify(data, null, 2);
   if (lastDispatchId) {
-    markArch('archExecutor', 'active');
+    setFlowStage('archExecutor', { confirmed: true });
     startEvidencePolling();
   }
 }
 
 function terminalState(value = '') {
-  return ['completed','pass','failed','error','rejected','cancelled'].includes(String(value).toLowerCase());
+  return ['completed', 'pass', 'failed', 'error', 'rejected', 'cancelled'].includes(String(value).toLowerCase());
 }
 
 async function refreshEvidence({ silent = false } = {}) {
   if (!lastDispatchId || evidenceBusy) return '';
   evidenceBusy = true;
   try {
+    setFlowStage('archEvidence');
     const trace = await invoke('get_execution_trace', { dispatchId: lastDispatchId }, { trace: !silent });
     const evidence = await invoke('get_evidence', { dispatchId: lastDispatchId }, { trace: !silent });
     const state = evidence?.state || trace?.state || 'unknown';
     $('missionState').textContent = state;
-    $('evidenceState').textContent = terminalState(state) && !['failed','error','rejected','cancelled'].includes(String(state).toLowerCase()) ? 'Verified' : state;
+    $('evidenceState').textContent = terminalState(state) && !['failed', 'error', 'rejected', 'cancelled'].includes(String(state).toLowerCase()) ? 'Verified' : state;
     resultEl.textContent = JSON.stringify({ trace, evidence }, null, 2);
     if (Array.isArray(trace?.trace)) renderReturnedTrace(trace);
     if (terminalState(state)) {
-      markArch('archEvidence', ['completed','pass'].includes(String(state).toLowerCase()) ? 'verified' : 'active');
+      setFlowStage('archEvidence', { confirmed: ['completed', 'pass'].includes(String(state).toLowerCase()), degraded: ['failed', 'error', 'rejected', 'cancelled'].includes(String(state).toLowerCase()) });
       addTrace({
         title: `Evidence state · ${state}`,
         detail: evidence?.evidence || 'Backend evidence endpoint returned terminal state.',
@@ -260,8 +333,8 @@ async function askCopilot(event) {
   $('copilotPrompt').value = '';
   $('askCopilot').disabled = true;
   $('askCopilot').textContent = 'Local model thinking…';
-  markArch('archWebmcp', 'active');
-  markArch('archBridge', 'active');
+  setFlowStage('archHuman', { confirmed: true });
+  window.setTimeout(() => setFlowStage('archWebmcp'), 120);
 
   try {
     const data = await invoke('ask_inneros_copilot', { project, message: prompt });
@@ -270,13 +343,20 @@ async function askCopilot(event) {
       lastExecutionBrief = data.executionBrief || prompt;
       $('executePlan').disabled = false;
       $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
-      markArch('archWebmcp', 'verified');
-      markArch('archBridge', 'verified');
+      $('copilotBadge').textContent = 'Local Qwen3-Coder · response confirmed';
+      $('copilotBadge').classList.add('ok');
+      $('modelPill').classList.remove('degraded');
     } else {
       bubble('error', 'COPILOT ERROR', data.error || 'Local model unavailable.');
+      $('copilotBadge').textContent = 'Local Qwen3-Coder · unavailable';
+      $('copilotBadge').classList.remove('ok');
+      $('modelPill').classList.add('degraded');
     }
   } catch (error) {
     bubble('error', 'COPILOT ERROR', error.message || 'Request failed.');
+    $('copilotBadge').textContent = 'Local Qwen3-Coder · request failed';
+    $('copilotBadge').classList.remove('ok');
+    $('modelPill').classList.add('degraded');
     addTrace({ title: 'Copilot request failed', detail: error.message, state: 'error', source: 'BROWSER' });
   } finally {
     $('askCopilot').disabled = false;
@@ -291,15 +371,16 @@ async function executePlan() {
   if (!instruction) return;
   $('executePlan').disabled = true;
   $('executePlan').textContent = 'Dispatching…';
-  markArch('archMcp', 'active');
+  setFlowStage('archMcp');
   try {
     const data = target === 'auto'
       ? await invoke('resolve_project_blocker', { project, policy: 'local_first', instruction })
       : await invoke('dispatch_agent_action', { agent: target, project, instruction });
     renderMission(data, target);
     if (data?.dispatchId) {
-      bubble('assistant', 'INNEROS ROUTER', `Execution dispatched to ${data?.route?.provider || data?.agent || target}. Dispatch ID: ${data.dispatchId}. The trace panel will poll backend evidence; no completion is claimed until the evidence endpoint confirms it.`);
-      markArch('archMcp', 'verified');
+      bubble('assistant', 'INNEROS ROUTER', `Task accepted by ${data?.route?.provider || data?.agent || target}. Dispatch ID: ${data.dispatchId}. Delivery is not completion; the trace now follows backend evidence until the task reaches a terminal state.`);
+    } else if (!data?.ok) {
+      bubble('error', 'INNEROS ROUTER', data?.error || data?.blocker || 'The selected lane could not accept the task.');
     }
   } finally {
     $('executePlan').disabled = false;
@@ -317,9 +398,9 @@ async function boot() {
     $('adapterState').textContent = health.adapter?.mode === 'mcp_loopback' ? 'MCP loopback · live' : (health.adapter?.mode || 'Unavailable');
     $('adapterDetail').textContent = health.adapter?.configured ? 'Private backend connected' : 'Adapter not connected';
     $('toolCount').textContent = `${health.webmcpTools || 0} WebMCP`;
-    $('copilotBadge').textContent = health.copilot?.configured ? 'Local Qwen3-Coder · ready' : 'Local copilot unavailable';
-    $('copilotBadge').classList.toggle('ok', Boolean(health.copilot?.configured));
-    if (health.copilot?.model) $('modelLabel').textContent = `${health.copilot.provider || 'Local AMD'} · ${health.copilot.runtime || 'vLLM'}`;
+    $('copilotBadge').textContent = health.copilot?.configured ? 'Local Qwen3-Coder · configured · verify on Ask' : 'Local copilot not configured';
+    $('copilotBadge').classList.toggle('ok', false);
+    if (health.copilot?.model) $('modelLabel').textContent = `${health.copilot.provider || 'Local AMD'} · ${health.copilot.runtime || 'vLLM'} · configured`;
 
     const cfRay = healthResponse.headers.get('cf-ray');
     const serverHeader = healthResponse.headers.get('server') || '';
@@ -337,7 +418,7 @@ async function boot() {
       backend: health.adapter?.mode || ''
     });
     if (health.adapter?.configured) {
-      markArch('archBridge', 'verified');
+      $('archBridge')?.classList.add('verified');
       addTrace({ title: 'Private bridge health', detail: `Adapter mode: ${health.adapter.mode}. Private backend is configured without exposing its endpoint.`, state: 'ok', source: 'BACKEND', confirmed: true, backend: health.adapter.mode });
     }
 
@@ -346,16 +427,25 @@ async function boot() {
     renderAgents(agents?.agents ? agents : { agents: policy.agents || [], live: false });
 
     const registration = installBrowserWebMCP(invoke);
-    $('mcpBadge').textContent = registration.supported ? `${registration.registered.length} WebMCP tools registered` : 'WebMCP browser API not present';
-    $('mcpBadge').classList.toggle('ok', registration.supported);
-    if (registration.supported) markArch('archWebmcp', 'verified');
+    if (registration.supported) {
+      $('mcpBadge').textContent = `ChatGPT WebMCP · ${registration.registered.length} Site Tools live`;
+      $('mcpBadge').classList.add('ok');
+      $('archWebmcp')?.classList.add('verified');
+    } else {
+      $('mcpBadge').textContent = 'Standard browser · Site Tools activate inside ChatGPT';
+      $('mcpBadge').classList.remove('ok');
+    }
     addTrace({
-      title: registration.supported ? 'Browser registered WebMCP tools' : 'Standard browser compatibility mode',
-      detail: registration.supported ? `${registration.registered.length} tools registered through document.modelContext.registerTool.` : 'This browser does not expose document.modelContext. The same page remains usable for manual demo; ChatGPT WebMCP can discover the tools.',
+      title: registration.supported ? 'Browser registered WebMCP Site Tools' : 'Standard-browser compatibility mode',
+      detail: registration.supported
+        ? `${registration.registered.length} tools registered through document.modelContext.registerTool.`
+        : 'This browser does not expose document.modelContext. Nothing is broken: open this same URL in ChatGPT’s integrated browser to use the 8 Site Tools.',
       state: registration.supported ? 'ok' : 'info',
       source: 'BROWSER',
       confirmed: false
     });
+    setFlowStage('archHuman', { confirmed: true });
+    window.setTimeout(settleFlow, 900);
   } catch (error) {
     $('health').textContent = 'Bridge: unavailable';
     $('adapterState').textContent = 'Unavailable';
