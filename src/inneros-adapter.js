@@ -179,16 +179,35 @@ async function callMcpTool(name, args = {}) {
 function publicAgentList(fabric = {}) {
   const bridge = fabric.layers?.ide_task_bridge || {};
   const acp = fabric.layers?.acp || {};
+  const codexSmoke = acp.codex_adapter_smoke || {};
+  const cursorProbe = acp.cursor_acp_probe || {};
   return {
     ok: fabric.ok !== false,
     state: fabric.status || 'ready',
     live: true,
     fabricVersion: fabric.fabric_version || 'inneros_agent_fabric',
     agents: [
-      { id: 'local', label: 'Local AMD', transport: 'a2a', ready: true, cost: '$0 external inference' },
-      { id: 'codex', label: 'Codex', transport: 'verified adapter', ready: Boolean(acp.ok) },
-      { id: 'cursor', label: 'Cursor', transport: 'IDE/ACP', ready: Boolean(bridge.ok), headlessClaimed: false },
-      { id: 'antigravity', label: 'AntiGravity', transport: 'IDE/headless when available', ready: Boolean(bridge.ok) }
+      {
+        id: 'local', label: 'Local AMD', transport: 'vLLM + durable A2A', ready: true,
+        capability: 'Qwen3-Coder 30B + local execution', cost: '$0 external inference',
+        verification: 'live MCP fabric'
+      },
+      {
+        id: 'codex', label: 'Codex', transport: 'A2A → verified adapter',
+        ready: Boolean(acp.ok && codexSmoke.ok), capability: 'coding task delivery',
+        verification: codexSmoke.ide_bridge?.execution_state || 'adapter verification required'
+      },
+      {
+        id: 'cursor', label: 'Cursor', transport: 'native ACP',
+        ready: Boolean(bridge.ok && cursorProbe.ok), capability: 'IDE coding agent',
+        verification: cursorProbe.status === 'PASS' ? 'ACP probe PASS' : 'ACP probe unavailable',
+        headlessClaimed: false
+      },
+      {
+        id: 'antigravity', label: 'AntiGravity', transport: 'IDE/headless bridge',
+        ready: Boolean(bridge.ok), capability: 'coding task delivery',
+        verification: bridge.ok ? 'bridge online · evidence required' : 'bridge unavailable'
+      }
     ],
     blockers: Array.isArray(fabric.blockers) ? fabric.blockers.slice(0, 10) : []
   };
@@ -321,10 +340,10 @@ async function invokeEndpoint(baseUrl, tool, input, endpointIndex) {
     let body = {};
     try { body = sanitizePublic(JSON.parse(await readLimited(response))); } catch { body = {}; }
     if (response.ok) return { terminal: true, result: { ...body, adapterEndpoint: endpointIndex } };
-    if ([502,503,504].includes(response.status)) return { terminal: false, result: { ok: false, state: 'unavailable', error: `inneros_adapter_http_${response.status}`, adapterEndpoint: endpointIndex } };
+    if ([502, 503, 504].includes(response.status)) return { terminal: false, result: { ok: false, state: 'unavailable', error: `inneros_adapter_http_${response.status}`, adapterEndpoint: endpointIndex } };
     return { terminal: true, result: { ok: false, state: body.state || 'unavailable', error: body.error || `inneros_adapter_http_${response.status}`, detail: body.detail, adapterEndpoint: endpointIndex } };
   } catch (error) {
-    return { terminal: false, result: { ok: false, state: 'unavailable', error: error.name === 'AbortError' ? 'inneros_adapter_timeout' : 'inneros_adapter_unreachable', adapterEndpoint: endpointIndex };
+    return { terminal: false, result: { ok: false, state: 'unavailable', error: error.name === 'AbortError' ? 'inneros_adapter_timeout' : 'inneros_adapter_unreachable', adapterEndpoint: endpointIndex } };
   } finally {
     clearTimeout(timer);
   }
