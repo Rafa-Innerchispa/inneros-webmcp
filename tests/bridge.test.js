@@ -9,8 +9,9 @@ test('registers all WebMCP tools when browser API exists', () => {
   const result = registerInnerOSWebMCP(context, async () => ({ ok: true }));
   assert.equal(result.supported, true);
   assert.deepEqual(result.registered, TOOL_NAMES);
-  assert.equal(seen.length, 7);
+  assert.equal(seen.length, 8);
   assert.ok(seen.every((tool) => typeof tool.execute === 'function'));
+  assert.ok(seen.some((tool) => tool.name === 'ask_inneros_copilot'));
 });
 
 test('unsupported browser is explicit', () => {
@@ -26,6 +27,13 @@ test('rejects non-allowlisted agent', async () => {
   const result = await invokeTool('dispatch_agent_action', { agent: 'shell', instruction: 'run anything' });
   assert.equal(result.state, 'rejected');
   assert.equal(result.error, 'agent_not_allowlisted');
+});
+
+test('copilot never falls through to execution', async () => {
+  const result = await invokeTool('ask_inneros_copilot', { project: 'inneros-webmcp', message: 'write a function' });
+  assert.equal(result.ok, false);
+  assert.equal(result.state, 'unavailable');
+  assert.equal(result.error, 'local_copilot_not_configured');
 });
 
 test('never fakes success without live adapter', async () => {
