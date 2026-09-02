@@ -7,32 +7,64 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="network-bg" aria-hidden="true"></div>
+  <div class="network-bg" aria-hidden="true"><span></span><span></span></div>
   <main class="page">
     <section class="hero">
       <div class="hero-copy">
         <p class="eyebrow">INNEROS · WEBMCP · LIVE CODING CONTROL PLANE</p>
         <h1>Ask once. Route anywhere. Prove every execution.</h1>
-        <p class="hero-sub">Talk to a local coding model running on our AMD infrastructure, then send the execution to Local A2A, Codex, Cursor, AntiGravity, or let InnerOS choose under a local-first policy. Every backend hop returns a traceable proof.</p>
-      </div>
-      <div class="hero-badges">
-        <span id="mcpBadge" class="badge">Checking WebMCP…</span>
-        <span id="copilotBadge" class="badge">Checking local model…</span>
+        <p class="hero-sub">One browser interface for a local coding model, WebMCP Site Tools, InnerOS orchestration, MCP/A2A routing and verifiable execution across Local, Codex, Cursor and AntiGravity.</p>
       </div>
 
-      <section class="architecture" aria-label="Live architecture">
-        <div class="arch-node verified" id="archHuman"><small>YOU</small><strong>Prompt</strong></div>
-        <span class="arch-link">→</span>
-        <div class="arch-node" id="archWebmcp"><small>WEBMCP</small><strong>Browser tools</strong></div>
-        <span class="arch-link">→</span>
-        <div class="arch-node" id="archBridge"><small>INNEROS</small><strong>Safe bridge</strong></div>
-        <span class="arch-link">→</span>
-        <div class="arch-node" id="archMcp"><small>MCP / A2A</small><strong>Agent fabric</strong></div>
-        <span class="arch-link">→</span>
-        <div class="arch-node" id="archExecutor"><small>EXECUTOR</small><strong>4 lanes</strong></div>
-        <span class="arch-link">→</span>
-        <div class="arch-node" id="archEvidence"><small>EVIDENCE</small><strong>Trace + proof</strong></div>
+      <section class="architecture flow-rail" id="flowRail" aria-label="Live execution flow">
+        <div class="arch-node verified" id="archHuman" data-stage="human"><small>YOU</small><strong>Prompt</strong><em>Input</em></div>
+        <span class="arch-link"><i></i>→</span>
+        <div class="arch-node" id="archWebmcp" data-stage="webmcp"><small>WEBMCP</small><strong>Site Tools</strong><em>Browser API</em></div>
+        <span class="arch-link"><i></i>→</span>
+        <div class="arch-node" id="archBridge" data-stage="bridge"><small>INNEROS</small><strong>Safe bridge</strong><em>Policy</em></div>
+        <span class="arch-link"><i></i>→</span>
+        <div class="arch-node" id="archMcp" data-stage="mcp"><small>MCP / A2A</small><strong>Agent fabric</strong><em>Handshake</em></div>
+        <span class="arch-link"><i></i>→</span>
+        <div class="arch-node" id="archExecutor" data-stage="executor"><small>EXECUTOR</small><strong>4 lanes</strong><em>Run</em></div>
+        <span class="arch-link"><i></i>→</span>
+        <div class="arch-node" id="archEvidence" data-stage="evidence"><small>EVIDENCE</small><strong>Trace + proof</strong><em>Verify</em></div>
       </section>
+
+      <section class="command-deck" aria-label="Try InnerOS now">
+        <div class="command-copy">
+          <p class="eyebrow">TRY IT NOW</p>
+          <h2>Ask the model, then choose who executes.</h2>
+          <p>The local model proposes. WebMCP dispatches. InnerOS proves what actually happened.</p>
+        </div>
+        <form id="copilotForm" class="copilot-form command-form">
+          <div class="project-row">
+            <label>Project
+              <input id="project" value="inneros-webmcp" maxlength="120">
+            </label>
+            <label>Execution target
+              <select id="executorTarget">
+                <option value="auto">Auto · InnerOS policy</option>
+                <option value="local">Local AMD · A2A</option>
+                <option value="codex">Codex</option>
+                <option value="cursor">Cursor · ACP</option>
+                <option value="antigravity">AntiGravity</option>
+              </select>
+            </label>
+          </div>
+          <label>What do you want to build or fix?
+            <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Inspect the project and propose a small safe improvement to the status endpoint with a regression test."></textarea>
+          </label>
+          <div class="action-row">
+            <button id="askCopilot" type="submit">Ask local model</button>
+            <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="hero-badges">
+        <span id="mcpBadge" class="badge">Checking browser mode…</span>
+        <span id="copilotBadge" class="badge">Checking local model…</span>
+      </div>
 
       <section class="status-strip" aria-label="System status">
         <article><span>EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Checking public delivery</small></article>
@@ -49,50 +81,26 @@
             <div>
               <p class="eyebrow">LOCAL INTELLIGENCE</p>
               <h2>InnerOS Copilot</h2>
-              <p>Qwen3-Coder answers in English. It can propose code, but it cannot claim execution. You choose who actually runs the job.</p>
+              <p>Qwen3-Coder answers in English and produces an execution brief. It cannot claim that code ran. Execution is a separate, traceable action.</p>
             </div>
-            <div class="model-pill"><span class="live-dot"></span><span id="modelLabel">Local AMD · vLLM</span></div>
+            <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
           </header>
 
-          <div id="copilotMessages" class="chat">
+          <div id="copilotMessages" class="chat compact-chat">
             <article class="bubble assistant">
               <span class="bubble-label">INNEROS COPILOT</span>
-              <p>Describe what you want to build or fix. I will produce an execution-ready coding brief, then you can route it to the agent lane you want.</p>
+              <p>Describe a coding task above. I will return an execution-ready brief. Then choose Local, Codex, Cursor, AntiGravity, or let InnerOS route it.</p>
             </article>
           </div>
-
-          <form id="copilotForm" class="copilot-form">
-            <div class="project-row">
-              <label>Project
-                <input id="project" value="inneros-webmcp" maxlength="120">
-              </label>
-              <label>Execution target
-                <select id="executorTarget">
-                  <option value="auto">Auto · InnerOS local-first</option>
-                  <option value="local">Local AMD · A2A</option>
-                  <option value="codex">Codex</option>
-                  <option value="cursor">Cursor</option>
-                  <option value="antigravity">AntiGravity</option>
-                </select>
-              </label>
-            </div>
-            <label>Ask the local model
-              <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Add a small status endpoint that returns the current WebMCP tool count and write a test for it."></textarea>
-            </label>
-            <div class="action-row">
-              <button id="askCopilot" type="submit">Ask local model</button>
-              <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
-            </div>
-          </form>
         </section>
 
         <section class="panel lanes-panel">
           <div class="section-heading">
-            <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Choose a lane or let InnerOS route it</h2></div>
+            <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Four lanes, one control surface</h2></div>
             <span id="fabricState" class="muted">Loading live fabric…</span>
           </div>
           <div class="cards" id="agents"></div>
-          <p class="lane-note">A green lane means the backend reports that capability as available. It does not mean code has executed. Execution starts only after a dispatch ID is returned.</p>
+          <p class="lane-note">Availability, delivery and execution are different states. A lane can accept a task without claiming that a process is already running.</p>
         </section>
 
         <section id="missionSummary" class="panel mission-panel" hidden>
@@ -116,7 +124,7 @@
           <div>
             <p class="eyebrow">PROOF, NOT THEATER</p>
             <h2>Global Live Trace</h2>
-            <p>Browser events are labeled separately from backend-confirmed events. Request IDs and dispatch IDs can be followed through the public API and the code.</p>
+            <p>Watch browser intent become a WebMCP call, a backend handshake, a durable dispatch and finally evidence. Browser-only events are visibly separated from backend-confirmed events.</p>
           </div>
           <button id="clearTrace" class="ghost" type="button">Clear</button>
         </header>
