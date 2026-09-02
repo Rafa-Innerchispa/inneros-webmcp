@@ -1,7 +1,11 @@
 name = "inneros-webmcp-edge"
 main = "src/cloudflare-worker.js"
-compatibility_date = "2026-09-01"
-workers_dev = true
+compatibility_date = "2026-09-02"
+workers_dev = false
+
+routes = [
+  { pattern = "webmcp.creatorcore.ai/edge/attest*", zone_name = "creatorcore.ai" }
+]
 
 [observability]
 enabled = true
