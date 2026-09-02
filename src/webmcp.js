@@ -1,4 +1,5 @@
 export const TOOL_NAMES = [
+  'ask_inneros_copilot',
   'list_agents',
   'get_project_status',
   'inspect_blockers',
@@ -9,6 +10,18 @@ export const TOOL_NAMES = [
 ];
 
 const definitions = {
+  ask_inneros_copilot: {
+    description: 'Ask the local InnerOS coding copilot for an English-only coding answer and execution brief. This tool never claims code execution.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', maxLength: 120 },
+        message: { type: 'string', maxLength: 4000 }
+      },
+      required: ['message'],
+      additionalProperties: false
+    }
+  },
   list_agents: {
     description: 'List agent runtimes and verified capabilities exposed by the public-safe InnerOS bridge.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
@@ -22,7 +35,7 @@ const definitions = {
     inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, taskId: { type: 'string', maxLength: 160 } }, additionalProperties: false }
   },
   dispatch_agent_action: {
-    description: 'Dispatch an allowlisted action to Codex, Cursor, AntiGravity, or the local InnerOS runtime.',
+    description: 'Dispatch an allowlisted coding action to Codex, Cursor, AntiGravity, or the local InnerOS runtime and return a real dispatch reference.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -36,7 +49,7 @@ const definitions = {
     }
   },
   resolve_project_blocker: {
-    description: 'Diagnose a project blocker, select the cheapest capable allowlisted agent under local-first policy, dispatch the repair, and return trace/evidence references.',
+    description: 'Diagnose a project blocker, select the cheapest capable allowlisted resource under local-first policy, dispatch the repair, and return trace/evidence references.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -49,7 +62,7 @@ const definitions = {
     }
   },
   get_execution_trace: {
-    description: 'Read sanitized execution events for a dispatched action.',
+    description: 'Read sanitized backend-confirmed execution events for a dispatched action.',
     inputSchema: { type: 'object', properties: { dispatchId: { type: 'string', maxLength: 200 } }, required: ['dispatchId'], additionalProperties: false }
   },
   get_evidence: {

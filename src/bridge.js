@@ -1,10 +1,11 @@
 import { adapterConfigured, callInnerOS } from './inneros-adapter.js';
+import { askInnerOSCopilot, copilotStatus } from './copilot.js';
 
 const AGENTS = Object.freeze([
   { id: 'codex', label: 'Codex', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
   { id: 'cursor', label: 'Cursor', transport: 'remote inbox', capability: 'IDE delivery', verification: 'no fake headless' },
   { id: 'antigravity', label: 'AntiGravity', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
-  { id: 'local', label: 'Local AMD', transport: 'local vLLM', capability: 'Qwen3-Coder 30B', verification: '$0 external inference' }
+  { id: 'local', label: 'Local AMD', transport: 'local vLLM / A2A', capability: 'Qwen3-Coder 30B', verification: '$0 external inference' }
 ]);
 const ALLOWED_AGENTS = Object.freeze(AGENTS.map((agent) => agent.id));
 const ALLOWED_ACTIONS = Object.freeze(['inspect','dispatch','status','evidence','resolve']);
@@ -30,12 +31,20 @@ export function getPolicy() {
     actions: ALLOWED_ACTIONS,
     executionPolicy: 'local_first',
     adapterConfigured: adapterConfigured(),
+    copilot: copilotStatus(),
     writesRequireBridge: true,
     truthRule: 'configured capability is never presented as running execution'
   };
 }
 
 export async function invokeTool(name, input = {}) {
+  if (name === 'ask_inneros_copilot') {
+    const project = safeText(input.project, 120) || 'inneros-webmcp';
+    const message = safeText(input.message, 4000);
+    if (!message) return { ok: false, state: 'rejected', error: 'message_required' };
+    return askInnerOSCopilot({ project, message });
+  }
+
   if (name === 'list_agents') {
     if (adapterConfigured()) return callInnerOS(name, {});
     return { ok: true, state: 'ready', agents: AGENTS, live: false };
