@@ -7,69 +7,134 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <main class="shell">
-    <section class="left">
-      <header>
-        <div>
-          <p class="eyebrow">INNEROS · WEBMCP</p>
-          <h1>Mission Control</h1>
-        </div>
+  <div class="network-bg" aria-hidden="true"></div>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">INNEROS · WEBMCP · LIVE CODING CONTROL PLANE</p>
+        <h1>Ask once. Route anywhere. Prove every execution.</h1>
+        <p class="hero-sub">Talk to a local coding model running on our AMD infrastructure, then send the execution to Local A2A, Codex, Cursor, AntiGravity, or let InnerOS choose under a local-first policy. Every backend hop returns a traceable proof.</p>
+      </div>
+      <div class="hero-badges">
         <span id="mcpBadge" class="badge">Checking WebMCP…</span>
-      </header>
+        <span id="copilotBadge" class="badge">Checking local model…</span>
+      </div>
 
-      <p class="sub">One mission in. InnerOS inspects, routes, dispatches and verifies work across a governed AI fabric while the browser exposes only a small public-safe WebMCP surface.</p>
-
-      <section class="edge-strip" aria-label="System status">
-        <article><span class="metric-label">EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Checking delivery path</small></article>
-        <article><span class="metric-label">ORIGIN</span><strong>Local / private</strong><small>InnerOS stays on-prem</small></article>
-        <article><span class="metric-label">BRIDGE</span><strong id="adapterState">Checking…</strong><small id="adapterDetail">Public-safe adapter</small></article>
-        <article><span class="metric-label">WEBMCP</span><strong id="toolCount">7 tools</strong><small>Structured agent surface</small></article>
+      <section class="architecture" aria-label="Live architecture">
+        <div class="arch-node verified" id="archHuman"><small>YOU</small><strong>Prompt</strong></div>
+        <span class="arch-link">→</span>
+        <div class="arch-node" id="archWebmcp"><small>WEBMCP</small><strong>Browser tools</strong></div>
+        <span class="arch-link">→</span>
+        <div class="arch-node" id="archBridge"><small>INNEROS</small><strong>Safe bridge</strong></div>
+        <span class="arch-link">→</span>
+        <div class="arch-node" id="archMcp"><small>MCP / A2A</small><strong>Agent fabric</strong></div>
+        <span class="arch-link">→</span>
+        <div class="arch-node" id="archExecutor"><small>EXECUTOR</small><strong>4 lanes</strong></div>
+        <span class="arch-link">→</span>
+        <div class="arch-node" id="archEvidence"><small>EVIDENCE</small><strong>Trace + proof</strong></div>
       </section>
 
-      <div class="section-title"><span>EXECUTION LANES</span><span id="fabricState">Loading live fabric…</span></div>
-      <div class="cards" id="agents"></div>
-
-      <div class="section-title"><span>MISSION</span><span>Autonomous · evidence required</span></div>
-      <form id="missionForm">
-        <label>Project
-          <input id="project" value="inneros-webmcp" maxlength="120">
-        </label>
-        <label>Routing policy
-          <select id="policy">
-            <option value="local_first">Local first · cheapest capable resource</option>
-            <option value="best_available">Best available · escalation allowed</option>
-          </select>
-        </label>
-        <label>Mission
-          <textarea id="instruction" maxlength="2000">Inspect this project, identify the current blocker, resolve it using the cheapest capable resource, run bounded verification, and return evidence.</textarea>
-        </label>
-        <button type="submit">Run autonomous mission</button>
-      </form>
-
-      <section id="missionSummary" class="mission-summary" hidden>
-        <div><span>SELECTED RESOURCE</span><strong id="selectedResource">Pending</strong></div>
-        <div><span>MODEL / RUNTIME</span><strong id="selectedModel">Pending</strong></div>
-        <div><span>EXTERNAL COST</span><strong id="externalCost">Pending</strong></div>
-        <div><span>EVIDENCE</span><strong id="evidenceState">Pending</strong></div>
+      <section class="status-strip" aria-label="System status">
+        <article><span>EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Checking public delivery</small></article>
+        <article><span>ORIGIN</span><strong>Local / private</strong><small>InnerOS remains on-prem</small></article>
+        <article><span>BRIDGE</span><strong id="adapterState">Checking…</strong><small id="adapterDetail">Public-safe adapter</small></article>
+        <article><span>TOOLS</span><strong id="toolCount">8 WebMCP</strong><small>Structured agent surface</small></article>
       </section>
-      <button id="refreshEvidence" class="ghost wide" type="button" hidden>Refresh trace & evidence</button>
-      <pre id="result" class="result">Mission system ready.</pre>
     </section>
 
-    <section class="right">
-      <header>
-        <div>
-          <p class="eyebrow">LIVE EXECUTION</p>
-          <h2>Global Live Trace</h2>
-        </div>
-        <button id="clearTrace" class="ghost">Clear</button>
-      </header>
-      <p class="trace-intro">Only backend-confirmed state is shown. Configured capability is never presented as completed execution.</p>
-      <div id="trace" class="trace"><div class="empty">No execution events yet.</div></div>
-      <footer>
-        <span>PUBLIC EDGE → PRIVATE AI FABRIC</span>
-        <span id="health">Bridge: checking…</span>
-      </footer>
+    <section class="console-grid">
+      <div class="workspace">
+        <section class="panel copilot-panel">
+          <header class="panel-header">
+            <div>
+              <p class="eyebrow">LOCAL INTELLIGENCE</p>
+              <h2>InnerOS Copilot</h2>
+              <p>Qwen3-Coder answers in English. It can propose code, but it cannot claim execution. You choose who actually runs the job.</p>
+            </div>
+            <div class="model-pill"><span class="live-dot"></span><span id="modelLabel">Local AMD · vLLM</span></div>
+          </header>
+
+          <div id="copilotMessages" class="chat">
+            <article class="bubble assistant">
+              <span class="bubble-label">INNEROS COPILOT</span>
+              <p>Describe what you want to build or fix. I will produce an execution-ready coding brief, then you can route it to the agent lane you want.</p>
+            </article>
+          </div>
+
+          <form id="copilotForm" class="copilot-form">
+            <div class="project-row">
+              <label>Project
+                <input id="project" value="inneros-webmcp" maxlength="120">
+              </label>
+              <label>Execution target
+                <select id="executorTarget">
+                  <option value="auto">Auto · InnerOS local-first</option>
+                  <option value="local">Local AMD · A2A</option>
+                  <option value="codex">Codex</option>
+                  <option value="cursor">Cursor</option>
+                  <option value="antigravity">AntiGravity</option>
+                </select>
+              </label>
+            </div>
+            <label>Ask the local model
+              <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Add a small status endpoint that returns the current WebMCP tool count and write a test for it."></textarea>
+            </label>
+            <div class="action-row">
+              <button id="askCopilot" type="submit">Ask local model</button>
+              <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel lanes-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Choose a lane or let InnerOS route it</h2></div>
+            <span id="fabricState" class="muted">Loading live fabric…</span>
+          </div>
+          <div class="cards" id="agents"></div>
+          <p class="lane-note">A green lane means the backend reports that capability as available. It does not mean code has executed. Execution starts only after a dispatch ID is returned.</p>
+        </section>
+
+        <section id="missionSummary" class="panel mission-panel" hidden>
+          <div class="section-heading"><div><p class="eyebrow">CURRENT EXECUTION</p><h2>Backend-confirmed mission</h2></div><span id="missionState" class="state-pill">Pending</span></div>
+          <div class="mission-summary">
+            <div><span>SELECTED RESOURCE</span><strong id="selectedResource">Pending</strong></div>
+            <div><span>MODEL / RUNTIME</span><strong id="selectedModel">Pending</strong></div>
+            <div><span>DISPATCH ID</span><strong id="dispatchId">Pending</strong></div>
+            <div><span>EVIDENCE</span><strong id="evidenceState">Pending</strong></div>
+          </div>
+          <button id="refreshEvidence" class="secondary wide" type="button" hidden>Refresh trace & evidence</button>
+          <details class="payload">
+            <summary>View sanitized backend payload</summary>
+            <pre id="result">No backend payload yet.</pre>
+          </details>
+        </section>
+      </div>
+
+      <aside class="panel trace-panel">
+        <header class="trace-header">
+          <div>
+            <p class="eyebrow">PROOF, NOT THEATER</p>
+            <h2>Global Live Trace</h2>
+            <p>Browser events are labeled separately from backend-confirmed events. Request IDs and dispatch IDs can be followed through the public API and the code.</p>
+          </div>
+          <button id="clearTrace" class="ghost" type="button">Clear</button>
+        </header>
+
+        <section class="proof-strip">
+          <div><span>LATEST REQUEST</span><strong id="proofRequest">None</strong></div>
+          <div><span>BACKEND</span><strong id="proofBackend">Waiting</strong></div>
+          <div><span>LATENCY</span><strong id="proofLatency">—</strong></div>
+          <div><span>DISPATCH</span><strong id="proofDispatch">None</strong></div>
+        </section>
+
+        <div id="trace" class="trace"><div class="empty">Waiting for live events.</div></div>
+
+        <footer>
+          <span>PUBLIC EDGE → PRIVATE AI FABRIC → VERIFIED EVIDENCE</span>
+          <span id="health">Bridge: checking…</span>
+        </footer>
+      </aside>
     </section>
   </main>
   <script type="module" src="/app.js"></script>
