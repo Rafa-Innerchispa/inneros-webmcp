@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { invokeTool, ALLOWED_AGENTS, ALLOWED_ACTIONS } from '../src/bridge.js';
 import { TOOL_NAMES, registerInnerOSWebMCP } from '../src/webmcp.js';
-import { resolveAdapterUrls } from '../src/inneros-adapter.js';
+import { buildMcpHeaders, parseMcpPayload, resolveAdapterUrls } from '../src/inneros-adapter.js';
 
 test('registers all WebMCP tools when browser API exists', () => {
   const seen = [];
@@ -34,6 +34,20 @@ test('adapter endpoint resolution is ordered deduplicated and failover-ready', (
     'https://secondary.example',
     'https://tertiary.example'
   ]);
+});
+
+test('mcp loopback includes server-side api key when configured', () => {
+  assert.equal(buildMcpHeaders({ INNEROS_ADAPTER_TOKEN: 'secret-token' })['X-API-Key'], 'secret-token');
+  assert.equal(buildMcpHeaders({}, 'session-1')['mcp-session-id'], 'session-1');
+  assert.equal(Object.hasOwn(buildMcpHeaders({}), 'X-API-Key'), false);
+});
+
+test('mcp sse payload parser preserves tool error envelopes', () => {
+  const parsed = parseMcpPayload(`event: message
+data: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Unauthorized"}],"isError":true}}
+`);
+  assert.equal(parsed.result.isError, true);
+  assert.equal(parsed.result.content[0].text, 'Unauthorized');
 });
 
 test('rejects non-allowlisted agent', async () => {

@@ -121,12 +121,19 @@ async function readLimited(response) {
   return new TextDecoder().decode(merged);
 }
 
+export function buildMcpHeaders(env = process.env, sessionId = '') {
+  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+  const token = String(env.INNEROS_ADAPTER_TOKEN || ADAPTER_TOKEN || '').trim();
+  if (token) headers['X-API-Key'] = token;
+  if (sessionId) headers['mcp-session-id'] = sessionId;
+  return headers;
+}
+
 async function mcpPost(url, body, sessionId = '') {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
-    if (sessionId) headers['mcp-session-id'] = sessionId;
+    const headers = buildMcpHeaders(process.env, sessionId);
     const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
     const text = await readLimited(response);
     return { response, rpc: parseMcpPayload(text), text };
@@ -155,6 +162,12 @@ function unwrapMcpResult(rpc) {
   if (!rpc) throw new Error('inneros_mcp_empty_response');
   if (rpc.error) throw new Error(`inneros_mcp_rpc_${rpc.error.code || 'error'}`);
   const result = rpc.result || {};
+  if (result.isError) {
+    const message = Array.isArray(result.content)
+      ? result.content.map((item) => item?.text || '').filter(Boolean).join(' ').slice(0, 160)
+      : 'tool_error';
+    throw new Error(`inneros_mcp_tool_error:${message || 'tool_error'}`);
+  }
   if (result.structuredContent && typeof result.structuredContent === 'object') return result.structuredContent;
   if (Array.isArray(result.content)) {
     const texts = result.content.filter((item) => item?.type === 'text' && typeof item.text === 'string').map((item) => item.text);
