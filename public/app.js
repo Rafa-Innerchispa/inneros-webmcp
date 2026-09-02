@@ -3,9 +3,11 @@ import { installBrowserWebMCP } from '/webmcp.js';
 const $ = (id) => document.getElementById(id);
 const traceEl = $('trace');
 const resultEl = $('result');
+let lastDispatchId = '';
 
-function escapeHtml(value='') {
-  return String(value).replace(/[&<>'\"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));
+function safeDetail(value) {
+  if (typeof value === 'string') return value;
+  try { return JSON.stringify(value); } catch { return ''; }
 }
 
 function addTrace(event) {
@@ -17,92 +19,130 @@ function addTrace(event) {
   time.textContent = new Date().toLocaleTimeString();
   const body = document.createElement('div');
   const title = document.createElement('strong');
-  title.textContent = event.title || '';
+  title.textContent = event.title || 'Event';
   const detail = document.createElement('p');
-  detail.textContent = event.detail || '';
+  detail.textContent = safeDetail(event.detail || '');
   body.append(title, detail);
   row.append(time, body);
   traceEl.prepend(row);
 }
 
-function setEvidence(data) {
-  const rows = $('evidence').querySelectorAll('dd');
-  rows[0].textContent = data.dispatchId || '—';
-  rows[1].textContent = data.agent || '—';
-  rows[2].textContent = data.state || '—';
-  rows[3].textContent = data.evidence?.length ? `${data.evidence.length} verified item(s)` : (data.blocker || data.error || data.detail || 'No verified result yet.');
-  const pill = $('evidenceState');
-  const state = (data.state || 'waiting').toUpperCase();
-  pill.textContent = state;
-  pill.className = `state-pill ${state === 'COMPLETED' || state === 'READY' ? 'ok' : state === 'BLOCKED' || state === 'UNAVAILABLE' || state === 'REJECTED' ? 'bad' : 'neutral'}`;
-}
-
-async function invoke(name, input = {}) {
-  addTrace({ title: `WebMCP → ${name}`, detail: JSON.stringify(input), state: 'info' });
+async function invoke(name, input = {}, { trace = true } = {}) {
+  if (trace) addTrace({ title: `WebMCP → ${name}`, detail: input, state: 'info' });
   const response = await fetch(`/api/tools/${encodeURIComponent(name)}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input)
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input)
   });
   const data = await response.json();
-  const state = data.state || (data.ok ? 'ok' : 'error');
-  addTrace({ title: `${name} · ${state}`, detail: data.blocker || data.detail || data.error || 'Completed', state: data.ok ? 'ok' : state });
-  if (data.dispatchId || data.state) setEvidence(data);
+  if (trace) {
+    addTrace({
+      title: `${name} · ${data.state || (data.ok ? 'ok' : 'error')}`,
+      detail: data.blocker || data.error || data.route || 'Backend response received.',
+      state: data.ok ? 'ok' : (data.state || 'blocked')
+    });
+  }
   return data;
 }
 
-function renderAgents(agents) {
-  const root = $('agents');
-  root.replaceChildren();
-  for (const agent of agents) {
-    const article = document.createElement('article');
-    const top = document.createElement('div');
-    top.className = 'agent-top';
+function renderAgents(data) {
+  const agents = Array.isArray(data?.agents) ? data.agents : [];
+  $('agents').replaceChildren(...agents.map((agent) => {
+    const card = document.createElement('article');
     const dot = document.createElement('span');
-    dot.className = 'dot';
+    dot.className = `dot ${agent.ready === false ? 'off' : ''}`;
+    const text = document.createElement('div');
     const strong = document.createElement('strong');
-    strong.textContent = agent.label || agent.id;
-    const transport = document.createElement('span');
-    transport.className = 'transport';
-    transport.textContent = agent.transport || 'configured';
-    top.append(dot, strong, transport);
-    const capability = document.createElement('p');
-    capability.textContent = agent.capability || '';
+    strong.textContent = agent.label || agent.id || 'Agent';
     const small = document.createElement('small');
-    small.textContent = agent.verification || 'state verified on query';
-    article.append(top, capability, small);
-    root.append(article);
+    const parts = [agent.transport, agent.capability, agent.cost, agent.verification].filter(Boolean);
+    small.textContent = parts.join(' · ') || 'Live capability';
+    text.append(strong, small);
+    card.append(dot, text);
+    return card;
+  }));
+  $('fabricState').textContent = data?.live ? 'Live fabric' : 'Configured lanes';
+}
+
+function renderMission(data) {
+  $('missionSummary').hidden = false;
+  const route = data?.route || {};
+  $('selectedResource').textContent = route.provider || route.providerId || data?.agent || 'Pending';
+  $('selectedModel').textContent = [route.model, route.runtime].filter(Boolean).join(' · ') || 'Pending';
+  $('externalCost').textContent = route.externalCost || (data?.policy === 'local_first' ? 'Local-first' : 'Pending');
+  $('evidenceState').textContent = data?.state === 'completed' ? 'Verified' : 'Pending verification';
+  lastDispatchId = data?.dispatchId || '';
+  $('refreshEvidence').hidden = !lastDispatchId;
+  resultEl.textContent = JSON.stringify(data, null, 2);
+  if (Array.isArray(data?.trace)) {
+    for (const step of data.trace.slice().reverse()) {
+      addTrace({ title: `${step.stage || 'mission'} · ${step.state || 'info'}`, detail: step.detail || '', state: step.state || 'info' });
+    }
+  }
+}
+
+async function refreshEvidence() {
+  if (!lastDispatchId) return;
+  const trace = await invoke('get_execution_trace', { dispatchId: lastDispatchId });
+  const evidence = await invoke('get_evidence', { dispatchId: lastDispatchId });
+  const state = evidence?.state || trace?.state || 'unknown';
+  $('evidenceState').textContent = state === 'completed' || state === 'pass' ? 'Verified' : state;
+  resultEl.textContent = JSON.stringify({ trace, evidence }, null, 2);
+  if (Array.isArray(trace?.trace)) {
+    for (const step of trace.trace.slice().reverse()) {
+      addTrace({ title: `trace · ${step.stage || step.state || 'event'}`, detail: step.detail || step, state: step.state || 'info' });
+    }
   }
 }
 
 async function boot() {
   try {
-    const health = await fetch('/api/health').then((r) => r.json());
+    const healthResponse = await fetch('/api/health');
+    const health = await healthResponse.json();
     $('health').textContent = health.ok ? 'Bridge: online' : 'Bridge: unavailable';
-    $('toolCount').textContent = String(health.webmcpTools || 0);
+    $('adapterState').textContent = health.adapter?.mode === 'mcp_loopback' ? 'MCP loopback' : (health.adapter?.mode || 'Unavailable');
+    $('adapterDetail').textContent = health.adapter?.configured ? 'Private backend connected' : 'Adapter not connected';
+    $('toolCount').textContent = `${health.webmcpTools || 0} tools`;
+
+    const cfRay = healthResponse.headers.get('cf-ray');
+    const serverHeader = healthResponse.headers.get('server') || '';
+    const cloudflareDetected = Boolean(cfRay) || /cloudflare/i.test(serverHeader);
+    $('edgeState').textContent = cloudflareDetected ? 'Cloudflare · live' : 'Direct / local';
+    $('edgeDetail').textContent = cloudflareDetected ? `Edge detected${cfRay ? ` · ${cfRay.split('-')[0]}` : ''}` : 'Awaiting public edge';
+
     const policy = await fetch('/api/policy').then((r) => r.json());
-    renderAgents(policy.agents || []);
+    const agents = await invoke('list_agents', {}, { trace: false });
+    renderAgents(agents?.agents ? agents : { agents: policy.agents || [], live: false });
+
     const registration = installBrowserWebMCP(invoke);
-    $('mcpBadge').textContent = registration.supported ? `${registration.registered.length} tools registered` : 'WebMCP API unavailable';
+    $('mcpBadge').textContent = registration.supported ? `${registration.registered.length} WebMCP tools registered` : 'Browser WebMCP unavailable';
     $('mcpBadge').classList.toggle('ok', registration.supported);
-    addTrace({ title: 'Control room initialized', detail: registration.supported ? 'Browser exposed the registered WebMCP tools.' : 'Fallback browser mode. No WebMCP API detected.', state: registration.supported ? 'ok' : 'info' });
+    addTrace({
+      title: 'Mission Control initialized',
+      detail: registration.supported ? 'WebMCP tool registration succeeded.' : 'Standard browser mode. WebMCP API not present.',
+      state: registration.supported ? 'ok' : 'info'
+    });
   } catch (error) {
     $('health').textContent = 'Bridge: unavailable';
+    $('adapterState').textContent = 'Unavailable';
     addTrace({ title: 'Boot failed', detail: error.message, state: 'blocked' });
   }
 }
 
-$('resolveForm').addEventListener('submit', async (event) => {
+$('missionForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const data = await invoke('resolve_project_blocker', { project: $('resolveProject').value, policy: 'local_first', instruction: $('resolveInstruction').value });
-  resultEl.textContent = JSON.stringify(data, null, 2);
-  if (Array.isArray(data.trace)) data.trace.forEach((item) => addTrace({ title: `${item.stage} · ${item.state}`, detail: item.detail, state: item.state }));
+  const input = {
+    project: $('project').value,
+    policy: $('policy').value,
+    instruction: $('instruction').value
+  };
+  const data = await invoke('resolve_project_blocker', input);
+  renderMission(data);
 });
 
-$('dispatchForm').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const data = await invoke('dispatch_agent_action', { agent: $('agent').value, project: $('project').value, instruction: $('instruction').value });
-  resultEl.textContent = JSON.stringify(data, null, 2);
+$('refreshEvidence').addEventListener('click', refreshEvidence);
+$('clearTrace').addEventListener('click', () => {
+  traceEl.innerHTML = '<div class="empty">No execution events yet.</div>';
 });
-
-$('clearTrace').addEventListener('click', () => { traceEl.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'No execution events yet.' })); });
 
 boot();
