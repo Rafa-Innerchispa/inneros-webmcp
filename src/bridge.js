@@ -17,6 +17,35 @@ function safeText(value, max = 2000) {
   return value.trim().slice(0, max);
 }
 
+const DMX_COLOR_ALIASES = Object.freeze({
+  red: 'rojo', green: 'verde', blue: 'azul', yellow: 'amarillo',
+  purple: 'morado', violet: 'violeta', magenta: 'magenta', pink: 'rosa',
+  cyan: 'cian', turquoise: 'turquesa', orange: 'naranja', amber: 'ambar',
+  gold: 'dorado', white: 'blanco', lime: 'lima', off: 'blackout', black: 'blackout'
+});
+const DMX_TARGET_ALIASES = Object.freeze({
+  all: 'all', 'all lights': 'all', todas: 'todas',
+  pars: 'tachos', par: 'tachos', tachos: 'tachos',
+  beams: 'beams', beam: 'beams',
+  spiders: 'pulpos', spider: 'pulpos', pulpos: 'pulpos',
+  'disco ball': 'bola_disco', bola_disco: 'bola_disco'
+});
+
+export function normalizeDmxDesignedScene(scene = {}) {
+  return {
+    ...scene,
+    steps: Array.isArray(scene.steps) ? scene.steps.map((step) => {
+      const rawColor = String(step?.color || '').trim().toLowerCase();
+      const rawTarget = String(step?.target || '').trim().toLowerCase();
+      return {
+        ...step,
+        color: DMX_COLOR_ALIASES[rawColor] || rawColor,
+        target: DMX_TARGET_ALIASES[rawTarget] || rawTarget
+      };
+    }) : []
+  };
+}
+
 function unavailable(tool, detail = 'Judge-safe InnerOS runtime adapter is not connected yet.') {
   return { ok: false, state: 'unavailable', tool, detail, source: 'inneros-webmcp-bridge' };
 }
@@ -131,12 +160,13 @@ export async function invokeTool(name, input = {}) {
     if (!description) return { ok: false, state: 'rejected', error: 'description_required' };
     const designed = await designDmxScene(description);
     if (!designed.ok) return designed;
-    const registered = await createDmxScene(designed.scene);
+    const normalizedScene = normalizeDmxDesignedScene(designed.scene);
+    const registered = await createDmxScene(normalizedScene);
     if (!registered.ok) return registered;
     return {
       ...registered,
       designer: { provider: designed.provider, runtime: designed.runtime, model: designed.model },
-      designedScene: designed.scene,
+      designedScene: normalizedScene,
       executionClaimed: true,
       physicalExecutionClaimed: false
     };

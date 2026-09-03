@@ -87,3 +87,23 @@ test('unknown tool rejected', async () => {
   const result = await invokeTool('execute_shell', {});
   assert.equal(result.error, 'tool_not_allowlisted');
 });
+
+
+test('DMX designed-scene aliases normalize before AG-59 validation', async () => {
+  const { normalizeDmxDesignedScene } = await import('../src/bridge.js');
+  const normalized = normalizeDmxDesignedScene({
+    name: 'recording_preview',
+    label: 'Recording Preview',
+    loops: 2,
+    steps: [
+      { target: 'all lights', color: 'purple', brightness: 128, duration_ms: 750 },
+      { target: 'all', color: 'blue', brightness: 128, duration_ms: 750 },
+      { target: 'disco ball', color: 'white', brightness: 100, duration_ms: 700 }
+    ]
+  });
+  assert.equal(normalized.steps[0].target, 'all');
+  assert.equal(normalized.steps[0].color, 'morado');
+  assert.equal(normalized.steps[1].color, 'azul');
+  assert.equal(normalized.steps[2].target, 'bola_disco');
+  assert.equal(normalized.steps[2].color, 'blanco');
+});
