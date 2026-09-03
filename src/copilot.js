@@ -70,7 +70,7 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     'Never claim that files changed, tests passed, or a deployment happened unless execution evidence is supplied by the system.',
     'Be concise and useful: explain the approach, mention important risks, and propose concrete implementation steps or code when appropriate.',
     dmxSceneIntent
-      ? 'This request is a governed native AG-59 DMX scene-creation action. Do NOT propose raw DMX addresses, raw channels, RGB channel writes, strobe frequencies, or flashes faster than 650ms per full-stage step. Explain that AUTO can design and register the scene safely, while physical light execution remains a separate Apply Scene action.'
+      ? 'This request is a governed native AG-59 DMX scene-creation action. Do NOT propose raw DMX addresses, raw channels, RGB channel writes, strobe frequencies, or flashes faster than 650ms per full-stage step. At the time of this reply NO scene has been created or registered yet. Never claim created, registered, complete, applied, or executed. Explain that AUTO will attempt safe design and registration immediately after this reply, while physical light execution remains a separate Apply Scene action.'
       : '',
     'End every answer with a single line beginning exactly with "EXECUTION BRIEF:" containing a compact instruction that another coding agent can execute.',
     `Current project: ${project}.`
@@ -96,6 +96,12 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     const data = await response.json();
     const content = text(data?.choices?.[0]?.message?.content, 8000);
     if (!content) return { ok: false, state: 'unavailable', error: 'local_copilot_empty_response' };
+    const responseMessage = dmxSceneIntent
+      ? 'Native AG-59 DMX scene creation detected. No scene has been registered yet. In AUTO, InnerOS will now ask the local Qwen scene designer for a bounded definition, normalize and validate it, then request AG-59 registration. The physical lights will remain idle until you press Apply scene.'
+      : content;
+    const brief = dmxSceneIntent
+      ? text(`Design and register a safe bounded AG-59 DMX scene from this user request: ${message}`, 900)
+      : executionBrief(content);
     return {
       ok: true,
       state: 'answered',
@@ -103,8 +109,8 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
       runtime: cfg.runtime,
       model: cfg.model,
       language: 'en',
-      message: content,
-      executionBrief: executionBrief(content),
+      message: responseMessage,
+      executionBrief: brief,
       nativeAction: dmxSceneIntent ? 'dmx_create_scene' : '',
       autoRunnable: dmxSceneIntent,
       executionClaimed: false,
