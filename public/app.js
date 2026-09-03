@@ -465,3 +465,99 @@ $('clearTrace').addEventListener('click', () => {
 });
 
 boot();
+
+
+// Unified chat UX: persistent browser history + automatic latest-message scroll.
+const CHAT_HISTORY_KEY = 'inneros-webmcp-chat-v1';
+const CHAT_HISTORY_LIMIT = 80;
+let persistedChatHistory = [];
+
+function readPersistedChatHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
+    persistedChatHistory = Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.role === 'string' && typeof item.message === 'string').slice(-CHAT_HISTORY_LIMIT)
+      : [];
+  } catch {
+    persistedChatHistory = [];
+  }
+  return persistedChatHistory;
+}
+
+function updateHistoryState(message = '') {
+  const state = $('historyState');
+  if (!state) return;
+  state.textContent = message || `${persistedChatHistory.length} messages saved in this browser.`;
+}
+
+function persistChatMessage(role, label, message) {
+  persistedChatHistory.push({ role, label, message, at: new Date().toISOString() });
+  persistedChatHistory = persistedChatHistory.slice(-CHAT_HISTORY_LIMIT);
+  try {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(persistedChatHistory));
+    updateHistoryState();
+  } catch {
+    updateHistoryState('History is available for this session only.');
+  }
+}
+
+function scrollChatToLatest() {
+  const chat = $('copilotMessages');
+  if (!chat) return;
+  requestAnimationFrame(() => {
+    chat.scrollTop = chat.scrollHeight;
+  });
+}
+
+const renderBubbleWithoutPersistence = bubble;
+bubble = function persistentBubble(role, label, message) {
+  const article = renderBubbleWithoutPersistence(role, label, message);
+  persistChatMessage(role, label, message);
+  scrollChatToLatest();
+  return article;
+};
+
+function restoreChatHistory() {
+  const history = readPersistedChatHistory();
+  if (!history.length) {
+    updateHistoryState('Chat history is saved in this browser.');
+    scrollChatToLatest();
+    return;
+  }
+  const chat = $('copilotMessages');
+  chat.replaceChildren();
+  for (const item of history) {
+    renderBubbleWithoutPersistence(item.role, item.label || 'MESSAGE', item.message);
+  }
+  updateHistoryState();
+  scrollChatToLatest();
+}
+
+function clearPersistedChatHistory() {
+  persistedChatHistory = [];
+  try { localStorage.removeItem(CHAT_HISTORY_KEY); } catch { /* session can continue */ }
+  lastCopilotPrompt = '';
+  lastExecutionBrief = '';
+  $('executePlan').disabled = true;
+  const chat = $('copilotMessages');
+  chat.replaceChildren();
+  renderBubbleWithoutPersistence(
+    'assistant',
+    'INNEROS COPILOT',
+    'Describe what you want to build or fix. I will answer here, in this same conversation, and prepare an execution brief. Then choose who executes it.'
+  );
+  updateHistoryState('Chat history cleared. New messages will be saved in this browser.');
+  scrollChatToLatest();
+}
+
+$('clearChat')?.addEventListener('click', clearPersistedChatHistory);
+$('copilotPrompt')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    $('copilotForm')?.requestSubmit();
+  }
+});
+
+const chatObserver = new MutationObserver(scrollChatToLatest);
+if ($('copilotMessages')) chatObserver.observe($('copilotMessages'), { childList: true });
+restoreChatHistory();

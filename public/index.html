@@ -30,33 +30,51 @@
         <div class="arch-node" id="archEvidence" data-stage="evidence"><small>EVIDENCE</small><strong>Trace + proof</strong><em>Verify</em></div>
       </section>
 
-      <section class="command-deck" aria-label="Try InnerOS now">
-        <div class="command-copy">
-          <p class="eyebrow">TRY IT NOW</p>
-          <h2>Ask the model, then choose who executes.</h2>
-          <p>The local model proposes. WebMCP dispatches. InnerOS proves what actually happened.</p>
-        </div>
-        <form id="copilotForm" class="copilot-form command-form">
-          <div class="project-row">
-            <label>Project
-              <input id="project" value="inneros-webmcp" maxlength="120">
-            </label>
-            <label>Execution target
-              <select id="executorTarget">
-                <option value="auto">Auto · InnerOS policy</option>
-                <option value="local">Local AMD · A2A</option>
-                <option value="codex">Codex</option>
-                <option value="cursor">Cursor · ACP</option>
-                <option value="antigravity">AntiGravity</option>
-              </select>
-            </label>
+      <section class="panel copilot-panel unified-chat-panel" aria-label="InnerOS coding chat">
+        <header class="panel-header chat-panel-header">
+          <div>
+            <p class="eyebrow">LIVE CODING CHAT</p>
+            <h2>InnerOS Copilot</h2>
+            <p>Talk to the local Qwen3-Coder model, then dispatch the proposed work to Auto, Local AMD, Codex, Cursor or AntiGravity. The conversation stays in one continuous panel and execution remains separately verifiable.</p>
           </div>
-          <label>What do you want to build or fix?
-            <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Inspect the project and propose a small safe improvement to the status endpoint with a regression test."></textarea>
+          <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
+        </header>
+
+        <div class="chat-context-row">
+          <label>Project
+            <input id="project" value="inneros-webmcp" maxlength="120">
           </label>
-          <div class="action-row">
-            <button id="askCopilot" type="submit">Ask local model</button>
-            <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
+          <label>Execution target
+            <select id="executorTarget">
+              <option value="auto">Auto · InnerOS policy</option>
+              <option value="local">Local AMD · A2A</option>
+              <option value="codex">Codex</option>
+              <option value="cursor">Cursor · ACP</option>
+              <option value="antigravity">AntiGravity</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="copilotMessages" class="chat unified-chat" aria-live="polite">
+          <article class="bubble assistant">
+            <span class="bubble-label">INNEROS COPILOT</span>
+            <p>Describe what you want to build or fix. I will answer here, in this same conversation, and prepare an execution brief. Then choose who executes it.</p>
+          </article>
+        </div>
+
+        <form id="copilotForm" class="chat-composer">
+          <label class="composer-label">Message InnerOS
+            <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Inspect the project and propose a small safe improvement with a regression test."></textarea>
+          </label>
+          <div class="composer-footer">
+            <div class="history-controls">
+              <span id="historyState">Chat history is saved in this browser.</span>
+              <button id="clearChat" class="ghost compact-button" type="button">Clear history</button>
+            </div>
+            <div class="action-row">
+              <button id="askCopilot" type="submit">Ask local model</button>
+              <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
+            </div>
           </div>
         </form>
       </section>
@@ -76,24 +94,6 @@
 
     <section class="console-grid">
       <div class="workspace">
-        <section class="panel copilot-panel">
-          <header class="panel-header">
-            <div>
-              <p class="eyebrow">LOCAL INTELLIGENCE</p>
-              <h2>InnerOS Copilot</h2>
-              <p>Qwen3-Coder answers in English and produces an execution brief. It cannot claim that code ran. Execution is a separate, traceable action.</p>
-            </div>
-            <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
-          </header>
-
-          <div id="copilotMessages" class="chat compact-chat">
-            <article class="bubble assistant">
-              <span class="bubble-label">INNEROS COPILOT</span>
-              <p>Describe a coding task above. I will return an execution-ready brief. Then choose Local, Codex, Cursor, AntiGravity, or let InnerOS route it.</p>
-            </article>
-          </div>
-        </section>
-
         <section class="panel lanes-panel">
           <div class="section-heading">
             <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Four lanes, one control surface</h2></div>
