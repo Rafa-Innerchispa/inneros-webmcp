@@ -170,7 +170,19 @@ export function unwrapMcpResult(rpc) {
   }
   if (result.structuredContent && typeof result.structuredContent === 'object') {
     const structured = result.structuredContent;
+    if (typeof structured.result === 'string') {
+      try {
+        const parsed = JSON.parse(structured.result);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch { /* fall through to the structured envelope */ }
+    }
     if (structured.result && typeof structured.result === 'object' && !Array.isArray(structured.result)) return structured.result;
+    if (typeof structured.data === 'string') {
+      try {
+        const parsed = JSON.parse(structured.data);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch { /* fall through to the structured envelope */ }
+    }
     if (structured.data && typeof structured.data === 'object' && !Array.isArray(structured.data)) return structured.data;
     return structured;
   }
