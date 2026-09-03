@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { liveAuthHeaders } from './live-auth-helper.js';
 
 test('live WebMCP dispatch creates a durable local A2A task', { skip: Boolean(process.env.CI) }, async () => {
+  const authHeaders = await liveAuthHeaders();
   const dispatchResponse = await fetch('http://127.0.0.1:5195/api/tools/dispatch_agent_action', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders },
     body: JSON.stringify({
       agent: 'local',
       project: 'inneros-webmcp',
@@ -22,7 +24,7 @@ test('live WebMCP dispatch creates a durable local A2A task', { skip: Boolean(pr
 
   const traceResponse = await fetch('http://127.0.0.1:5195/api/tools/get_execution_trace', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders },
     body: JSON.stringify({ dispatchId: dispatch.dispatchId })
   });
   const trace = await traceResponse.json();
