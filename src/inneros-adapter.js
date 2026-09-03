@@ -278,15 +278,17 @@ function publicAgentList(fabric = {}) {
         verification: codexSmoke.ide_bridge?.execution_state || 'adapter verification required'
       },
       {
-        id: 'cursor', label: 'Cursor', transport: 'native ACP',
+        id: 'cursor', label: 'Cursor', transport: 'native ACP · remote inbox',
         ready: Boolean(bridge.ok && cursorProbe.ok), capability: 'IDE coding agent',
         verification: cursorProbe.status === 'PASS' ? 'ACP probe PASS' : 'ACP probe unavailable',
-        headlessClaimed: false
+        headlessClaimed: false,
+        deliveryState: bridge.ok ? 'remote_inbox' : 'unavailable'
       },
       {
-        id: 'antigravity', label: 'AntiGravity', transport: 'IDE/headless bridge',
+        id: 'antigravity', label: 'AntiGravity', transport: 'IDE/headless bridge · remote inbox',
         ready: Boolean(bridge.ok), capability: 'coding task delivery',
-        verification: bridge.ok ? 'bridge online · evidence required' : 'bridge unavailable'
+        verification: bridge.ok ? 'bridge online · evidence required' : 'bridge unavailable',
+        deliveryState: bridge.ok ? 'remote_inbox' : 'unavailable'
       }
     ],
     blockers: Array.isArray(fabric.blockers) ? fabric.blockers.slice(0, 10) : []

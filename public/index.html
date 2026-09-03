@@ -37,7 +37,10 @@
             <h2>InnerOS Copilot</h2>
             <p>Talk to the local Qwen3-Coder model, then dispatch the proposed work to Auto, Local AMD, Codex, Cursor or AntiGravity. The conversation stays in one continuous panel and execution remains separately verifiable.</p>
           </div>
-          <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
+          <div class="chat-header-actions">
+            <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
+            <button id="logoutBtn" class="ghost compact-button" type="button" hidden>Log out</button>
+          </div>
         </header>
 
         <div class="chat-context-row">

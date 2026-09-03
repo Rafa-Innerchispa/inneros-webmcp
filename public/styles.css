@@ -65,6 +65,8 @@ button:disabled{opacity:.42;cursor:not-allowed}
 .panel-header,.section-heading,.trace-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
 .panel h2{margin:3px 0 0;font-size:1.2rem;letter-spacing:-.025em}
 .panel-header p:not(.eyebrow),.trace-header p:not(.eyebrow),.lane-note{margin:6px 0 0;color:#7f999c;line-height:1.48;font-size:.78rem;max-width:760px}
+.chat-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.compact-button{padding:7px 10px;font-size:.68rem}
 .model-pill{display:flex;align-items:center;gap:8px;flex:0 0 auto;border:1px solid #285344;border-radius:999px;padding:8px 11px;color:#a7d7c4;background:#081b16;font-size:.68rem}
 .model-pill.degraded{border-color:#75483f;color:#d9a396;background:#1a100e}
 .live-dot{width:7px;height:7px;border-radius:50%;background:#66d99f;box-shadow:0 0 12px rgba(102,217,159,.65)}

@@ -78,6 +78,9 @@ function addTrace(event) {
   const metaValues = [
     event.requestId ? `request ${event.requestId}` : '',
     event.dispatchId ? `dispatch ${event.dispatchId}` : '',
+    event.deliveryState ? `delivery ${event.deliveryState}` : '',
+    event.executionState ? `execution ${event.executionState}` : '',
+    event.transport ? `transport ${event.transport}` : '',
     Number.isFinite(event.latencyMs) ? `${event.latencyMs} ms` : '',
     event.backend ? `backend ${event.backend}` : ''
   ].filter(Boolean);
@@ -174,7 +177,10 @@ async function invoke(name, input = {}, { trace = true } = {}) {
       requestId: proof.requestId,
       latencyMs: proof.latencyMs,
       backend: proof.backend,
-      dispatchId: data.dispatchId || ''
+      dispatchId: data.dispatchId || '',
+      deliveryState: data.deliveryState || data.delivery_state || '',
+      executionState: data.executionState || data.execution_state || '',
+      transport: data.transport || data.route?.provider || ''
     });
   }
   renderReturnedTrace(data);
@@ -203,9 +209,19 @@ function mergedLanes(data) {
 
 function laneState(agent, returnedByBackend) {
   if (!returnedByBackend) return { label: 'DISCOVERING', className: 'unknown' };
-  if (agent.ready === false) return { label: 'DEGRADED', className: 'off' };
-  if (agent.ready === true) return { label: 'AVAILABLE', className: 'ready' };
+  const transport = String(agent.transport || '').toLowerCase();
+  if (agent.ready === false) return { label: 'UNAVAILABLE', className: 'off' };
+  if (/remote inbox|ide inbox|acp inbox/.test(transport)) return { label: 'REMOTE INBOX', className: 'unknown' };
+  if (agent.ready === true) return { label: 'READY', className: 'ready' };
+  if (/degraded|partial/.test(String(agent.verification || '').toLowerCase())) return { label: 'DEGRADED', className: 'off' };
   return { label: 'CONFIGURED', className: 'unknown' };
+}
+
+function isCasualPrompt(text = '') {
+  const normalized = String(text).trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.length > 80) return false;
+  return /^(hola|hello|hi|hey|buenos dias|buenas tardes|buenas noches|good morning|good afternoon|thanks|thank you|gracias)[!.?\s]*$/.test(normalized);
 }
 
 function renderAgents(data) {
@@ -339,9 +355,20 @@ async function askCopilot(event) {
   try {
     const data = await invoke('ask_inneros_copilot', { project, message: prompt });
     if (data.ok) {
-      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'}`, data.message);
-      lastExecutionBrief = data.executionBrief || prompt;
-      $('executePlan').disabled = false;
+      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'} · ${data.backend || 'local_vllm'}`, data.message);
+      const casual = isCasualPrompt(prompt);
+      lastExecutionBrief = casual ? '' : (data.executionBrief || prompt);
+      $('executePlan').disabled = casual;
+      if (casual) {
+        addTrace({
+          title: 'Casual chat only · no dispatch',
+          detail: 'Greeting or small talk stays on local_vllm. Execution remains disabled until an explicit execute action.',
+          state: 'info',
+          source: 'BROWSER',
+          confirmed: false,
+          backend: data.backend || 'local_vllm'
+        });
+      }
       $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
       $('copilotBadge').textContent = 'Local Qwen3-Coder · response confirmed';
       $('copilotBadge').classList.add('ok');
@@ -388,8 +415,19 @@ async function executePlan() {
   }
 }
 
+async function ensureAuthenticated() {
+  const auth = await fetch('/api/auth/status').then((r) => r.json()).catch(() => ({ ok: true, authenticated: true }));
+  if (auth?.auth?.required && !auth.authenticated) {
+    window.location.replace('/login.html');
+    return false;
+  }
+  $('logoutBtn').hidden = !auth?.auth?.required;
+  return true;
+}
+
 async function boot() {
   try {
+    if (!(await ensureAuthenticated())) return;
     const started = performance.now();
     const healthResponse = await fetch('/api/health');
     const health = await healthResponse.json();
@@ -455,6 +493,10 @@ async function boot() {
 
 $('copilotForm').addEventListener('submit', askCopilot);
 $('executePlan').addEventListener('click', executePlan);
+$('logoutBtn')?.addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.replace('/login.html');
+});
 $('refreshEvidence').addEventListener('click', () => refreshEvidence({ silent: false }));
 $('clearTrace').addEventListener('click', () => {
   traceEl.replaceChildren();
