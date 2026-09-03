@@ -361,3 +361,12 @@ button:hover:not(:disabled){filter:brightness(1.06);box-shadow:0 10px 28px rgba(
   .flow-caption small{display:none}.control-dock{display:block}.dmx-dock-panel{margin-top:8px}.lane-heading{align-items:flex-start}.lane-heading-actions{justify-content:flex-start}
   .chat-header-actions{max-width:100%;justify-content:flex-start}.selected-executor-pill{min-width:0}.cockpit-chat-header{align-items:flex-start}
 }
+
+
+/* AUTO native-action feedback: make routing semantics obvious without pretending
+   scene registration equals physical DMX execution. */
+.native-action-hint{margin-top:7px;padding:8px 10px;border:1px solid rgba(111,91,255,.38);border-radius:11px;background:linear-gradient(90deg,rgba(111,91,255,.12),rgba(73,217,255,.07));color:#c9c3ff;font-size:.66rem;line-height:1.4;letter-spacing:.01em}
+.native-action-hint[data-state="active"]{box-shadow:0 0 24px rgba(111,91,255,.1);animation:nativeActionPulse 1.6s ease-in-out infinite alternate}
+.native-action-hint[data-state="ready"]{border-color:rgba(73,217,255,.46);color:#aeefff;background:linear-gradient(90deg,rgba(73,217,255,.1),rgba(111,91,255,.08));animation:none}
+.native-action-hint[data-state="error"]{border-color:rgba(222,104,115,.5);color:#f3b0b7;background:rgba(95,27,37,.22);animation:none}
+@keyframes nativeActionPulse{from{opacity:.82}to{opacity:1;box-shadow:0 0 30px rgba(111,91,255,.18)}}

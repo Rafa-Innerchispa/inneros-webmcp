@@ -38,3 +38,19 @@ test('InnerChispa visual identity is present in the cockpit header', () => {
   assert.match(css, /brandOrbit/);
   assert.match(css, /cockpitAurora/);
 });
+
+
+test('AUTO continues bounded native DMX creation without requiring a second execute click', () => {
+  assert.match(app, /AUTO native action detected · dmx_create_scene/);
+  assert.match(app, /autoRegisterDmxSceneIfEligible/);
+  assert.match(app, /dmx_create_scene/);
+  assert.match(app, /Physical execution remains manual/);
+  assert.match(app, /Scene registered · use Apply scene/);
+  assert.match(css, /native-action-hint/);
+});
+
+test('explicit provider lanes are not hijacked by AUTO native DMX interception', () => {
+  assert.match(app, /target === 'auto'/);
+  assert.match(app, /originalPrompt = lastCopilotPrompt/);
+  assert.match(app, /regular execution handler then dispatches that lane/);
+});
