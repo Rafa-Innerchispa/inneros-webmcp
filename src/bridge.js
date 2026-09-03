@@ -1,11 +1,11 @@
 import { adapterConfigured, callInnerOS } from './inneros-adapter.js';
-import { askInnerOSCopilot, copilotStatus } from './copilot.js';
-import { dmxStatus, getDmxStatus, setDmxScene, runDmxBlackout } from './dmx-bridge.js';
+import { askInnerOSCopilot, copilotStatus, designDmxScene } from './copilot.js';
+import { dmxStatus, getDmxStatus, setDmxScene, runDmxBlackout, createDmxScene } from './dmx-bridge.js';
 
 const AGENTS = Object.freeze([
   { id: 'codex', label: 'Codex', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
   { id: 'cursor', label: 'Cursor', transport: 'remote inbox', capability: 'IDE delivery', verification: 'no fake headless' },
-  { id: 'antigravity', label: 'AntiGravity', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
+  { id: 'antigravity', label: 'AntiGravity', transport: 'remote inbox', capability: 'IDE delivery', verification: 'live execution requires returned session evidence' },
   { id: 'local', label: 'Local AMD', transport: 'local vLLM / A2A', capability: 'Qwen3-Coder 30B', verification: '$0 external inference' }
 ]);
 const ALLOWED_AGENTS = Object.freeze(AGENTS.map((agent) => agent.id));
@@ -72,24 +72,16 @@ export async function invokeTool(name, input = {}) {
     if (!['local_first','best_available'].includes(policy)) return { ok: false, state: 'rejected', error: 'policy_not_allowlisted' };
     const instruction = safeText(input.instruction, 2000) || 'Diagnose the current blocker and resolve it safely.';
     if (adapterConfigured()) return callInnerOS(name, { project, policy, instruction });
-
     const dispatchId = `wmcp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const record = {
-      dispatchId,
-      agent: null,
-      project,
-      instruction,
-      policy,
-      state: 'blocked',
-      blocker: 'judge_safe_inneros_adapter_not_connected',
-      createdAt: new Date().toISOString(),
+      dispatchId, agent: null, project, instruction, policy, state: 'blocked',
+      blocker: 'judge_safe_inneros_adapter_not_connected', createdAt: new Date().toISOString(),
       trace: [
         { stage: 'diagnose', state: 'blocked', detail: 'Live blocker adapter required before diagnosis can be claimed.' },
         { stage: 'route', state: 'pending', detail: `Policy: ${policy}` },
         { stage: 'dispatch', state: 'pending', detail: 'No agent dispatch performed.' },
         { stage: 'verify', state: 'pending', detail: 'No evidence available.' }
-      ],
-      evidence: []
+      ], evidence: []
     };
     dispatches.set(dispatchId, record);
     return { ok: false, ...record };
@@ -103,14 +95,11 @@ export async function invokeTool(name, input = {}) {
     if (!ALLOWED_AGENTS.includes(agent)) return { ok: false, state: 'rejected', error: 'agent_not_allowlisted' };
     if (!instruction) return { ok: false, state: 'rejected', error: 'instruction_required' };
     if (adapterConfigured()) return callInnerOS(name, { agent, project, taskId, instruction });
-
     const dispatchId = `wmcp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const record = {
       dispatchId, agent, project, taskId, instruction,
-      state: 'blocked', blocker: 'judge_safe_inneros_adapter_not_connected',
-      createdAt: new Date().toISOString(),
-      trace: [{ stage: 'dispatch', state: 'blocked', detail: 'No external execution claimed without a live adapter.' }],
-      evidence: []
+      state: 'blocked', blocker: 'judge_safe_inneros_adapter_not_connected', createdAt: new Date().toISOString(),
+      trace: [{ stage: 'dispatch', state: 'blocked', detail: 'No external execution claimed without a live adapter.' }], evidence: []
     };
     dispatches.set(dispatchId, record);
     return { ok: false, ...record };
@@ -137,10 +126,25 @@ export async function invokeTool(name, input = {}) {
     return unavailable(name);
   }
 
+  if (name === 'dmx_create_scene') {
+    const description = safeText(input.description, 1800);
+    if (!description) return { ok: false, state: 'rejected', error: 'description_required' };
+    const designed = await designDmxScene(description);
+    if (!designed.ok) return designed;
+    const registered = await createDmxScene(designed.scene);
+    if (!registered.ok) return registered;
+    return {
+      ...registered,
+      designer: { provider: designed.provider, runtime: designed.runtime, model: designed.model },
+      designedScene: designed.scene,
+      executionClaimed: true,
+      physicalExecutionClaimed: false
+    };
+  }
+
   if (name === 'dmx_status') return getDmxStatus();
   if (name === 'dmx_set_scene') return setDmxScene(input);
   if (name === 'dmx_blackout') return runDmxBlackout();
-
   return { ok: false, state: 'rejected', error: 'tool_not_allowlisted' };
 }
 

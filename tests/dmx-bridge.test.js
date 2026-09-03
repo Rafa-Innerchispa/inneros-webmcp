@@ -104,3 +104,27 @@ test('dmx blackout calls private engine endpoint', async () => {
 test('legacy allowlist export remains available', () => {
   assert.deepEqual(ALLOWLISTED_DMX_SCENES, DEFAULT_DMX_SCENES);
 });
+
+
+test('dmx create scene registers a structured scene without physical execution', async () => {
+  const { createDmxScene } = await import('../src/dmx-bridge.js');
+  let body = null;
+  const fetchImpl = async (url, options = {}) => {
+    assert.match(String(url), /\/api\/scenes\/register$/);
+    assert.equal(options.method, 'POST');
+    body = JSON.parse(options.body);
+    return { ok: true, async json() { return { ok: true, action: 'scene_registered', scene: 'aurora_pulse', supported_scenes: ['rainbow', 'aurora_pulse', 'blackout'] }; } };
+  };
+  const result = await createDmxScene({
+    name: 'aurora_pulse', label: 'Aurora Pulse', loops: 2,
+    steps: [
+      { target: 'all', color: 'morado', brightness: 180, duration_ms: 700 },
+      { target: 'all', color: 'azul', brightness: 160, duration_ms: 700 }
+    ]
+  }, { env: { INNEROS_DMX_API_URL: 'http://127.0.0.1:18796' }, fetchImpl });
+  assert.equal(result.ok, true);
+  assert.equal(result.state, 'registered');
+  assert.equal(result.physicalExecutionClaimed, false);
+  assert.equal(body.name, 'aurora_pulse');
+  assert.deepEqual(result.supportedScenes, ['rainbow', 'aurora_pulse', 'blackout']);
+});

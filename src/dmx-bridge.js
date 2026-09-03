@@ -173,3 +173,35 @@ export async function runDmxBlackout(options = {}) {
     ? { ok: true, state: 'applied', action: 'blackout', agent: DMX_AGENT_ID, executionClaimed: true }
     : result;
 }
+
+
+export async function createDmxScene(input = {}, options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const name = normalizeSceneName(input.name);
+  const label = String(input.label || '').trim().slice(0, 80);
+  const loops = Number(input.loops);
+  const steps = Array.isArray(input.steps) ? input.steps.slice(0, 24) : [];
+  if (!name || !label || !Number.isInteger(loops) || !steps.length) {
+    return { ok: false, state: 'rejected', error: 'invalid_scene_definition' };
+  }
+  const result = await dmxFetch('/api/scenes/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, scene: { label, loops, steps } })
+  }, env, fetchImpl);
+  if (!result.ok) return result;
+  const supportedScenes = extractSupportedScenes(result);
+  return {
+    ok: true,
+    state: 'registered',
+    scene: name,
+    label,
+    supportedScenes,
+    dynamicScenes: result.dynamic_scenes || {},
+    agent: DMX_AGENT_ID,
+    action: 'scene_registered',
+    executionClaimed: true,
+    physicalExecutionClaimed: false
+  };
+}

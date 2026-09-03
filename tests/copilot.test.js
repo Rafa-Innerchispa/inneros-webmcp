@@ -48,3 +48,28 @@ test('copilot fails truthfully when not configured', async () => {
   assert.equal(result.state, 'unavailable');
   assert.equal(result.error, 'local_copilot_not_configured');
 });
+
+
+test('local model can design a bounded DMX scene as structured JSON without executing it', async () => {
+  const { designDmxScene } = await import('../src/copilot.js');
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return { choices: [{ message: { content: JSON.stringify({
+        name: 'aurora_pulse', label: 'Aurora Pulse', loops: 2,
+        steps: [
+          { target: 'all', color: 'morado', brightness: 180, duration_ms: 700 },
+          { target: 'all', color: 'azul', brightness: 160, duration_ms: 700 }
+        ]
+      }) } }] };
+    }
+  });
+  const result = await designDmxScene('Create an Aurora Pulse lighting scene', {
+    env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-local-model' },
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.state, 'designed');
+  assert.equal(result.scene.name, 'aurora_pulse');
+  assert.equal(result.executionClaimed, false);
+});
