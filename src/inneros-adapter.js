@@ -158,7 +158,7 @@ async function openMcpSession(url) {
   return sessionId;
 }
 
-function unwrapMcpResult(rpc) {
+export function unwrapMcpResult(rpc) {
   if (!rpc) throw new Error('inneros_mcp_empty_response');
   if (rpc.error) throw new Error(`inneros_mcp_rpc_${rpc.error.code || 'error'}`);
   const result = rpc.result || {};
@@ -168,7 +168,12 @@ function unwrapMcpResult(rpc) {
       : 'tool_error';
     throw new Error(`inneros_mcp_tool_error:${message || 'tool_error'}`);
   }
-  if (result.structuredContent && typeof result.structuredContent === 'object') return result.structuredContent;
+  if (result.structuredContent && typeof result.structuredContent === 'object') {
+    const structured = result.structuredContent;
+    if (structured.result && typeof structured.result === 'object' && !Array.isArray(structured.result)) return structured.result;
+    if (structured.data && typeof structured.data === 'object' && !Array.isArray(structured.data)) return structured.data;
+    return structured;
+  }
   if (Array.isArray(result.content)) {
     const texts = result.content.filter((item) => item?.type === 'text' && typeof item.text === 'string').map((item) => item.text);
     for (const text of texts) {
@@ -425,3 +430,5 @@ export async function callInnerOS(tool, input = {}) {
   }
   return { ...last, adapterAttempts: endpoints.length, failoverExhausted: endpoints.length > 1 };
 }
+
+export async function __debugCallMcpToolForTests(name, args = {}) { return callMcpTool(name, args); }
