@@ -1,3 +1,4 @@
+
 const TIMEOUT_MS = Number(process.env.INNEROS_ADAPTER_TIMEOUT_MS || 8000);
 const MAX_RESPONSE_BYTES = Number(process.env.INNEROS_ADAPTER_MAX_BYTES || 262144);
 const ADAPTER_TOKEN = process.env.INNEROS_ADAPTER_TOKEN || '';
@@ -123,7 +124,7 @@ async function readLimited(response) {
 
 export function buildMcpHeaders(env = process.env, sessionId = '') {
   const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
-  const token = String(env.INNEROS_ADAPTER_TOKEN || ADAPTER_TOKEN || '').trim();
+  const token = String(env.INNEROS_ADAPTER_TOKEN || env.MCP_API_KEY || ADAPTER_TOKEN || '').trim();
   if (token) headers['X-API-Key'] = token;
   if (sessionId) headers['mcp-session-id'] = sessionId;
   return headers;

@@ -20,3 +20,10 @@ test('worker health endpoint returns edge attestation', async () => {
   assert.equal(body.service, 'inneros-webmcp-edge');
   assert.equal(body.role, 'public-edge-attestation');
 });
+
+test('worker route is intentionally narrow and does not proxy WebMCP', async () => {
+  const response = await worker.fetch({ method: 'GET', url: 'https://webmcp.creatorcore.ai/app' });
+  const body = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(body.error, 'not_found');
+});
