@@ -196,6 +196,38 @@ export function unwrapMcpResult(rpc) {
   return result;
 }
 
+export function findIdeDispatchPayload(value, depth = 0) {
+  if (depth > 7 || value == null) return null;
+  let current = value;
+  if (typeof current === 'string') {
+    const trimmed = current.trim();
+    if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return null;
+    try { current = JSON.parse(trimmed); } catch { return null; }
+  }
+  if (Array.isArray(current)) {
+    for (const item of current) {
+      const found = findIdeDispatchPayload(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!current || typeof current !== 'object') return null;
+  if (typeof current.dispatch_id === 'string' && current.dispatch_id.startsWith('ide_')) return current;
+
+  const preferred = ['structuredContent', 'result', 'data', 'content', 'text'];
+  for (const key of preferred) {
+    if (!(key in current)) continue;
+    const found = findIdeDispatchPayload(current[key], depth + 1);
+    if (found) return found;
+  }
+  for (const [key, child] of Object.entries(current)) {
+    if (preferred.includes(key)) continue;
+    const found = findIdeDispatchPayload(child, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 async function callMcpTool(name, args = {}) {
   if (!DIRECT_MCP_TOOLS.has(name)) throw new Error('inneros_internal_tool_not_allowlisted');
   const url = resolveMcpUrl();
@@ -214,6 +246,10 @@ async function callMcpTool(name, args = {}) {
   const call = await mcpPost(url, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: effectiveArgs } }, sessionId);
   if (!call.response.ok) throw new Error(`inneros_mcp_call_http_${call.response.status}`);
   const result = unwrapMcpResult(call.rpc);
+  if (name === 'ide_dispatch_task') {
+    const dispatchPayload = findIdeDispatchPayload(call.rpc) || findIdeDispatchPayload(result);
+    if (dispatchPayload) return dispatchPayload;
+  }
   if (name === 'ide_task_status') {
     return { ...result, execution_state: canonicalIdeState(result), evidence: canonicalIdeEvidence(result) };
   }
