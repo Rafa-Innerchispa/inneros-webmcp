@@ -1500,3 +1500,347 @@ function installLocalWhisperVoice(attempt = 0) {
 }
 
 window.setTimeout(() => installLocalWhisperVoice(), 80);
+
+
+// Chat-first composer polish: familiar attach/mic/audio/send controls while preserving approval-first execution.
+const composerIcons = Object.freeze({
+  attach: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 14.8 6.2a3.2 3.2 0 0 1 4.5 4.5l-8 8a5 5 0 0 1-7.1-7.1l8-8"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 0 0-7 0v5a3.5 3.5 0 0 0 3.5 3.5Z"/><path d="M5.5 10.5a6.5 6.5 0 0 0 13 0M12 17v4M9 21h6"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9H5Z"/><path d="M17 9.2a4 4 0 0 1 0 5.6M19.5 6.8a7.5 7.5 0 0 1 0 10.4"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>',
+  send: '<span class="send-label">Send</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg>'
+});
+
+let lastLocalModelReply = '';
+let localReplyUtterance = null;
+
+function setIconButton(button, icon, label, title = label) {
+  if (!button) return;
+  button.className = 'composer-icon-button';
+  button.innerHTML = icon;
+  button.setAttribute('aria-label', label);
+  button.title = title;
+}
+
+function latestStoredLocalReply() {
+  for (let i = persistedChatHistory.length - 1; i >= 0; i -= 1) {
+    const item = persistedChatHistory[i];
+    if (item?.role === 'assistant' && /LOCAL AMD|QWEN|INNEROS COPILOT/i.test(item.label || '')) return String(item.message || '');
+  }
+  return '';
+}
+
+function syncResponseAudioButtons() {
+  const play = $('playResponseBtn');
+  const stop = $('stopResponseBtn');
+  const supported = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+  if (play) play.disabled = !supported || !lastLocalModelReply;
+  if (stop) stop.disabled = !supported || !window.speechSynthesis?.speaking;
+  if (play) play.classList.toggle('active', Boolean(window.speechSynthesis?.speaking));
+}
+
+function stopLocalResponseAudio() {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  localReplyUtterance = null;
+  syncResponseAudioButtons();
+}
+
+function playOrPauseLocalResponse() {
+  if (!lastLocalModelReply || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+  const synth = window.speechSynthesis;
+  if (synth.speaking) {
+    if (synth.paused) synth.resume();
+    else synth.pause();
+    syncResponseAudioButtons();
+    return;
+  }
+
+  const spoken = lastLocalModelReply
+    .replace(/\n?EXECUTION BRIEF:[\s\S]*$/i, '')
+    .replace(/[`*_#]/g, '')
+    .trim()
+    .slice(0, 5000);
+  if (!spoken) return;
+  const utterance = new SpeechSynthesisUtterance(spoken);
+  utterance.lang = /[áéíóúñ¿¡]/i.test(spoken) ? 'es-EC' : 'en-US';
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.onstart = syncResponseAudioButtons;
+  utterance.onpause = syncResponseAudioButtons;
+  utterance.onresume = syncResponseAudioButtons;
+  utterance.onend = () => { localReplyUtterance = null; syncResponseAudioButtons(); };
+  utterance.onerror = () => { localReplyUtterance = null; syncResponseAudioButtons(); };
+  localReplyUtterance = utterance;
+  synth.speak(utterance);
+  syncResponseAudioButtons();
+}
+
+function updateSendVisual(busy = false) {
+  const send = $('askCopilot');
+  if (!send) return;
+  send.className = 'composer-send-button';
+  send.innerHTML = composerIcons.send;
+  send.disabled = busy;
+  send.setAttribute('aria-label', busy ? 'Local model is responding' : 'Send to local model');
+  send.title = busy ? 'Local model is responding' : 'Send to local model';
+  const hint = $('sendHint');
+  if (hint) hint.textContent = busy ? 'Local Qwen is responding…' : 'Enter to send · Shift+Enter for a new line';
+}
+
+function autoGrowComposer() {
+  const textarea = $('copilotPrompt');
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${Math.min(170, Math.max(64, textarea.scrollHeight))}px`;
+}
+
+function installChatComposerPolish(attempt = 0) {
+  const composer = document.querySelector('.recording-composer');
+  const attach = $('attachFileBtn');
+  const voice = $('voiceBtn');
+  const send = $('askCopilot');
+  const execute = $('executePlan');
+  if (!composer || !attach || !voice || !send || !execute) {
+    if (attempt < 20) window.setTimeout(() => installChatComposerPolish(attempt + 1), 50);
+    return;
+  }
+  if (composer.classList.contains('modern-composer')) return;
+  composer.classList.add('modern-composer');
+
+  const toolbar = $('contextToolbar');
+  if (toolbar) {
+    toolbar.className = 'attachment-tray';
+    const actions = toolbar.querySelector('.context-actions');
+    const fileInput = $('contextFileInput');
+    if (fileInput && actions) toolbar.append(fileInput);
+    actions?.remove();
+  }
+
+  const label = composer.querySelector('.composer-label');
+  if (label) label.setAttribute('for', 'copilotPrompt');
+
+  setIconButton(attach, composerIcons.attach, 'Attach PDF or code', 'Attach PDF or code');
+  setIconButton(voice, composerIcons.mic, 'Dictate with Local Whisper', 'Dictate with Local Whisper');
+
+  const controlRow = document.createElement('div');
+  controlRow.className = 'composer-control-row';
+  const iconTools = document.createElement('div');
+  iconTools.className = 'composer-icon-tools';
+  iconTools.setAttribute('aria-label', 'Message tools');
+  iconTools.append(attach, voice);
+
+  const play = document.createElement('button');
+  play.id = 'playResponseBtn';
+  play.type = 'button';
+  setIconButton(play, composerIcons.speaker, 'Play or pause last local model response', 'Play / pause last local model response');
+  play.addEventListener('click', playOrPauseLocalResponse);
+  iconTools.append(play);
+
+  const stop = document.createElement('button');
+  stop.id = 'stopResponseBtn';
+  stop.type = 'button';
+  setIconButton(stop, composerIcons.stop, 'Stop response audio', 'Stop response audio');
+  stop.addEventListener('click', stopLocalResponseAudio);
+  iconTools.append(stop);
+
+  const sendTools = document.createElement('div');
+  sendTools.className = 'composer-send-tools';
+  const sendHint = document.createElement('span');
+  sendHint.id = 'sendHint';
+  sendHint.textContent = 'Enter to send · Shift+Enter for a new line';
+  sendTools.append(sendHint);
+  updateSendVisual(false);
+  sendTools.append(send);
+  controlRow.append(iconTools, sendTools);
+
+  const footer = composer.querySelector('.composer-footer');
+  if (footer) {
+    footer.className = 'composer-secondary-row';
+    const actionRow = footer.querySelector('.action-row');
+    actionRow?.remove();
+    footer.append(execute);
+    composer.insertBefore(controlRow, footer);
+  } else {
+    composer.append(controlRow);
+    const secondary = document.createElement('div');
+    secondary.className = 'composer-secondary-row';
+    const history = composer.querySelector('.history-controls');
+    if (history) secondary.append(history);
+    secondary.append(execute);
+    composer.append(secondary);
+  }
+  execute.classList.add('approval-button');
+  execute.textContent = execute.disabled ? 'Approve & Execute Plan' : execute.textContent;
+
+  const textarea = $('copilotPrompt');
+  textarea?.addEventListener('input', autoGrowComposer);
+  autoGrowComposer();
+
+  lastLocalModelReply = latestStoredLocalReply();
+  syncResponseAudioButtons();
+
+  const heroSub = document.querySelector('.recording-hero-copy .hero-sub');
+  if (heroSub) heroSub.textContent = heroSub.textContent.replace(/\b(?:11|12) WebMCP\b/g, '13 WebMCP');
+  if ($('toolCount')) $('toolCount').textContent = '13 WebMCP';
+}
+
+// Override the earlier browser-recognition setup while keeping Local Whisper first and button-icon safe.
+installLocalWhisperVoice = function polishedLocalWhisperVoice(attempt = 0) {
+  const oldButton = $('voiceBtn');
+  if (!oldButton) {
+    if (attempt < 12) window.setTimeout(() => installLocalWhisperVoice(attempt + 1), 50);
+    return;
+  }
+  const button = oldButton.cloneNode(true);
+  oldButton.replaceWith(button);
+  button.disabled = false;
+  button.dataset.state = 'idle';
+  button.setAttribute('aria-label', 'Dictate with Local Whisper');
+  button.title = 'Dictate through the on-prem Whisper service. Dictation never sends or executes by itself.';
+
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function setState(state, title) {
+    button.dataset.state = state;
+    button.setAttribute('aria-label', title);
+    button.title = title;
+  }
+  function enableBrowserFallback() {
+    if (!Recognition) {
+      button.disabled = true;
+      setState('unavailable', 'Voice unavailable');
+      return;
+    }
+    setState('fallback', 'Local Whisper unavailable · click for browser speech-recognition fallback');
+    button.onclick = () => {
+      const recognition = new Recognition();
+      recognition.lang = 'es-EC';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      const base = $('copilotPrompt').value.trim();
+      setState('recording', 'Browser fallback listening · click is not required to send');
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) transcript += event.results[i][0].transcript;
+        $('copilotPrompt').value = `${base}${base ? ' ' : ''}${transcript}`.trim();
+        autoGrowComposer();
+      };
+      recognition.onend = () => setState('fallback', 'Local Whisper unavailable · browser speech-recognition fallback');
+      recognition.onerror = () => setState('fallback', 'Local Whisper unavailable · browser speech-recognition fallback');
+      recognition.start();
+    };
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    enableBrowserFallback();
+    return;
+  }
+
+  let recorder = null;
+  let stream = null;
+  let chunks = [];
+  let recording = false;
+  let autoStop = null;
+
+  button.onclick = async () => {
+    if (recording) {
+      recording = false;
+      if (autoStop) clearTimeout(autoStop);
+      button.disabled = true;
+      setState('transcribing', 'Transcribing locally with Whisper…');
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferred = window.MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      recorder = new MediaRecorder(stream, { mimeType: preferred });
+      chunks = [];
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+      recorder.onstop = async () => {
+        stream?.getTracks?.().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || preferred });
+        try {
+          const dataBase64 = await fileToBase64(blob);
+          const response = await fetch('/api/voice/transcribe', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ mime: blob.type || preferred, dataBase64 })
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || 'local_whisper_failed');
+          const existing = $('copilotPrompt').value.trim();
+          $('copilotPrompt').value = `${existing}${existing ? ' ' : ''}${data.transcript}`.trim();
+          autoGrowComposer();
+          button.disabled = false;
+          setState('idle', 'Dictate with Local Whisper');
+          if ($('attachmentState')) $('attachmentState').textContent = `Voice transcribed locally · ${data.transcript.length} chars · review before sending`;
+          addTrace({ title: 'Voice transcribed · Local Whisper', detail: `${data.transcript.length} characters inserted into the composer. Nothing was sent or executed.`, state: 'ready', source: 'BACKEND', confirmed: true, backend: 'local_whisper' });
+        } catch (error) {
+          button.disabled = false;
+          if ($('attachmentState')) $('attachmentState').textContent = `Local Whisper unavailable · ${error.message}. Browser fallback enabled.`;
+          addTrace({ title: 'Local Whisper unavailable', detail: error.message || 'transcription failed', state: 'blocked', source: 'BACKEND', confirmed: true, backend: 'local_whisper' });
+          enableBrowserFallback();
+        }
+      };
+      recorder.start();
+      recording = true;
+      setState('recording', 'Recording · click again to stop and transcribe locally');
+      if ($('attachmentState')) $('attachmentState').textContent = 'Recording for Local Whisper · click the microphone again to stop and transcribe';
+      autoStop = window.setTimeout(() => {
+        if (!recording) return;
+        recording = false;
+        button.disabled = true;
+        setState('transcribing', 'Transcribing locally with Whisper…');
+        if (recorder?.state !== 'inactive') recorder.stop();
+      }, 45000);
+    } catch (error) {
+      recording = false;
+      stream?.getTracks?.().forEach((track) => track.stop());
+      if ($('attachmentState')) $('attachmentState').textContent = `Microphone unavailable · ${error.message}`;
+      enableBrowserFallback();
+    }
+  };
+};
+
+// Keep the visible Send control intact while the local model answers and make the reply playable.
+conversationalAskCopilot = async function polishedConversationalAskCopilot() {
+  const prompt = $('copilotPrompt')?.value?.trim() || '';
+  if (!prompt) return;
+  const project = $('project')?.value?.trim() || 'inneros-webmcp';
+  const history = conversationHistoryForModel();
+  const context = contextText();
+  lastCopilotPrompt = prompt;
+  lastExecutionBrief = '';
+  $('executePlan').disabled = true;
+  bubble('user', 'YOU', prompt);
+  $('copilotPrompt').value = '';
+  autoGrowComposer();
+  updateSendVisual(true);
+  setFlowStage('archHuman', { confirmed: true });
+  window.setTimeout(() => setFlowStage('archWebmcp'), 120);
+  try {
+    const data = await invoke('ask_inneros_copilot', { project, message: prompt, history, context });
+    if (data.ok) {
+      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'} · ${data.backend || 'local_vllm'}`, data.message);
+      lastLocalModelReply = String(data.message || '');
+      syncResponseAudioButtons();
+      const casual = isCasualPrompt(prompt);
+      lastExecutionBrief = casual ? '' : (data.executionBrief || prompt);
+      $('executePlan').disabled = casual;
+      $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
+      $('copilotBadge').textContent = `Local Qwen3-Coder · ${data.historyTurnsUsed || 0} prior turns · ${data.contextCharsUsed || 0} context chars`;
+      $('copilotBadge').classList.add('ok');
+      if (!casual) setNativeActionHint('PLAN READY · keep refining in chat, then Approve & Execute when satisfied. Nothing has executed.', 'info');
+    } else {
+      bubble('error', 'COPILOT ERROR', data.error || 'Local model unavailable.');
+    }
+  } catch (error) {
+    bubble('error', 'COPILOT ERROR', error.message || 'Request failed.');
+  } finally {
+    updateSendVisual(false);
+  }
+};
+
+window.setTimeout(() => installChatComposerPolish(), 150);
+window.addEventListener('beforeunload', stopLocalResponseAudio);

@@ -102,3 +102,36 @@ test('voice is local-first through on-prem Whisper with explicit browser fallbac
   assert.match(serverSource, /provider: 'Local Whisper'/);
   assert.match(serverSource, /executionClaimed: false/);
 });
+
+
+test('composer exposes familiar send, voice, playback and stop controls', () => {
+  assert.match(app, /installChatComposerPolish/);
+  assert.match(app, /playResponseBtn/);
+  assert.match(app, /stopResponseBtn/);
+  assert.match(app, /Send to local model/);
+  assert.match(app, /Enter to send · Shift\+Enter for a new line/);
+  assert.match(app, /speechSynthesis/);
+  assert.match(app, /SpeechSynthesisUtterance/);
+});
+
+test('approval remains visually and semantically separate from sending chat', () => {
+  assert.match(app, /approval-button/);
+  assert.match(app, /Approve & Execute Plan/);
+  assert.match(app, /composer-secondary-row/);
+});
+
+test('cockpit uses a subtle embedded InnerOS neural background image', () => {
+  assert.match(css, /data:image\/svg\+xml/);
+  assert.match(css, /body::before/);
+  assert.match(css, /opacity:\.22/);
+});
+
+test('visible WebMCP count is normalized to the current 13-tool surface', () => {
+  assert.match(app, /'13 WebMCP'/);
+});
+
+
+test('public browser bundle remains syntactically valid after composer polish', () => {
+  const parseable = app.replace(/^import\s+[^;]+;\s*/m, '');
+  assert.doesNotThrow(() => new Function(parseable));
+});
