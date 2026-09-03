@@ -44,6 +44,13 @@ function executionBrief(content) {
   return text(match?.[1] || content, 900);
 }
 
+export function isDmxSceneCreationIntent(value = '') {
+  const message = String(value || '').toLowerCase();
+  return /(crea|crear|cree|nueva|nuevo|create|make|build|design)/.test(message)
+    && /(escena|scene|efecto|effect)/.test(message)
+    && /(dmx|luz|luces|light|lights|iluminaci[oó]n)/.test(message);
+}
+
 export async function askInnerOSCopilot(input = {}, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || fetch;
@@ -52,6 +59,7 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
   const project = text(input.project, 120) || 'inneros-webmcp';
   if (!message) return { ok: false, state: 'rejected', error: 'message_required' };
   if (!cfg.configured) return { ok: false, state: 'unavailable', error: 'local_copilot_not_configured' };
+  const dmxSceneIntent = isDmxSceneCreationIntent(message);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Number(env.INNEROS_COPILOT_TIMEOUT_MS || DEFAULT_TIMEOUT_MS));
@@ -61,6 +69,9 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     'You are connected to a local coding model, but you do NOT execute code yourself.',
     'Never claim that files changed, tests passed, or a deployment happened unless execution evidence is supplied by the system.',
     'Be concise and useful: explain the approach, mention important risks, and propose concrete implementation steps or code when appropriate.',
+    dmxSceneIntent
+      ? 'This request is a governed native AG-59 DMX scene-creation action. Do NOT propose raw DMX addresses, raw channels, RGB channel writes, strobe frequencies, or flashes faster than 650ms per full-stage step. Explain that AUTO can design and register the scene safely, while physical light execution remains a separate Apply Scene action.'
+      : '',
     'End every answer with a single line beginning exactly with "EXECUTION BRIEF:" containing a compact instruction that another coding agent can execute.',
     `Current project: ${project}.`
   ].join(' ');
@@ -94,6 +105,8 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
       language: 'en',
       message: content,
       executionBrief: executionBrief(content),
+      nativeAction: dmxSceneIntent ? 'dmx_create_scene' : '',
+      autoRunnable: dmxSceneIntent,
       executionClaimed: false,
       backend: 'local_vllm'
     };
@@ -107,7 +120,6 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     clearTimeout(timer);
   }
 }
-
 
 function extractJsonObject(content = '') {
   const raw = String(content || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
@@ -137,6 +149,8 @@ export async function designDmxScene(description, options = {}) {
     'For target all/todas every duration_ms must be at least 650. For other groups use at least 250.',
     'Never create rapid strobe, raw DMX channels, fixture addresses, or more than 20 seconds total duration.',
     'If the user asks for flashing, interpret it as slow alternating pulses at 650ms or slower.',
+    'If the user explicitly gives a scene name, preserve that human name in label and normalize it to lower_snake_case for name. Example: "flash blue" becomes label "Flash Blue" and name "flash_blue".',
+    'If the user asks for a flash/pulse in a color, alternate that requested color with blackout. For full-stage target all/todas, every step must be at least 650ms.',
     'Use blackout with brightness 0 for an off step.'
   ].join(' ');
   try {

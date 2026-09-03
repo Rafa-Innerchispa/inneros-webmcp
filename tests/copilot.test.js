@@ -73,3 +73,47 @@ test('local model can design a bounded DMX scene as structured JSON without exec
   assert.equal(result.scene.name, 'aurora_pulse');
   assert.equal(result.executionClaimed, false);
 });
+
+
+test('DMX scene intent is tagged as a safe native AUTO action', async () => {
+  const { isDmxSceneCreationIntent } = await import('../src/copilot.js');
+  assert.equal(isDmxSceneCreationIntent('crea una escena nueva paera todas las luces demx que funiconen como flash en azul y ponle el nombre flash blue'), true);
+  assert.equal(isDmxSceneCreationIntent('fix the README typo'), false);
+
+  let requestBody = null;
+  const result = await askInnerOSCopilot({
+    project: 'inneros-webmcp',
+    message: 'crea una escena nueva para todas las luces dmx que funcionen como flash en rojo y ponle el nombre flash rojo'
+  }, {
+    env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-model' },
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return { ok: true, async json() { return { choices: [{ message: { content: 'AUTO can register this bounded AG-59 scene without running the fixtures.\nEXECUTION BRIEF: Register a safe slow red flash scene named Flash Rojo.' } }] }; } };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.nativeAction, 'dmx_create_scene');
+  assert.equal(result.autoRunnable, true);
+  assert.match(requestBody.messages[0].content, /Do NOT propose raw DMX addresses/);
+  assert.match(requestBody.messages[0].content, /flashes faster than 650ms/);
+});
+
+test('DMX designer prompt preserves explicit names and converts flash to bounded color-blackout pulses', async () => {
+  const { designDmxScene } = await import('../src/copilot.js');
+  let requestBody = null;
+  const result = await designDmxScene('crea flash azul y ponle el nombre flash blue', {
+    env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-model' },
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return { ok: true, async json() { return { choices: [{ message: { content: JSON.stringify({ name: 'flash_blue', label: 'Flash Blue', loops: 2, steps: [
+        { target: 'all', color: 'azul', brightness: 220, duration_ms: 700 },
+        { target: 'all', color: 'blackout', brightness: 0, duration_ms: 700 }
+      ] }) } }] }; } };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.scene.name, 'flash_blue');
+  assert.equal(result.scene.label, 'Flash Blue');
+  assert.match(requestBody.messages[0].content, /preserve that human name/);
+  assert.match(requestBody.messages[0].content, /alternate that requested color with blackout/);
+});

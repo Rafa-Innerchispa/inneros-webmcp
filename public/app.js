@@ -822,3 +822,134 @@ if ($('agents')) {
   laneObserver.observe($('agents'), { childList: true });
 }
 decorateLaneCards();
+
+
+// AUTO native actions: bounded DMX scene creation can register immediately after
+// the local Copilot identifies the intent. Registration never runs the fixtures.
+let autoDmxRegistrationInFlight = false;
+let autoDmxHandledPrompt = '';
+
+function ensureNativeActionHint() {
+  let hint = $('nativeActionHint');
+  if (hint) return hint;
+  hint = document.createElement('div');
+  hint.id = 'nativeActionHint';
+  hint.className = 'native-action-hint';
+  hint.hidden = true;
+  const context = document.querySelector('.recording-context-row');
+  context?.insertAdjacentElement('afterend', hint);
+  return hint;
+}
+
+function setNativeActionHint(message = '', state = 'info') {
+  const hint = ensureNativeActionHint();
+  hint.textContent = message;
+  hint.dataset.state = state;
+  hint.hidden = !message;
+}
+
+async function autoRegisterDmxSceneIfEligible() {
+  const prompt = String(lastCopilotPrompt || '').trim();
+  const target = $('executorTarget')?.value || 'auto';
+  if (target !== 'auto') return;
+  if (!isDmxSceneCreationPrompt(prompt)) return;
+  if (!prompt || prompt === autoDmxHandledPrompt || autoDmxRegistrationInFlight) return;
+
+  autoDmxHandledPrompt = prompt;
+  autoDmxRegistrationInFlight = true;
+  const executeButton = $('executePlan');
+  setNativeActionHint('AUTO detected a native AG-59 action · designing and registering the scene locally. Physical execution remains manual.', 'active');
+  $('selectedExecutorLabel').textContent = 'AUTO → Local Qwen + AG-59';
+  addTrace({
+    title: 'AUTO native action detected · dmx_create_scene',
+    detail: 'InnerOS is designing and registering a bounded scene through Local Qwen + AG-59. This does not run the physical lights.',
+    state: 'info',
+    source: 'BROWSER',
+    confirmed: false
+  });
+  if (executeButton) {
+    executeButton.disabled = true;
+    executeButton.textContent = 'AUTO · registering scene…';
+  }
+
+  try {
+    const data = await invoke('dmx_create_scene', { description: prompt });
+    resultEl.textContent = JSON.stringify(data, null, 2);
+    if (data.ok) {
+      await refreshDmxSceneSelector(data.supportedScenes || []);
+      const select = $('dmxScene');
+      if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
+      $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
+      setNativeActionHint(`REGISTERED · ${data.label || data.scene} · selected above · press Apply scene to run the lights`, 'ready');
+      bubble('assistant', 'AUTO · LOCAL QWEN + AG-59', `Created and registered ${data.label || data.scene}. The new scene is selected in DMX quick control. The lights have NOT run yet; press Apply scene when you want the physical execution.`);
+      addTrace({
+        title: `Native capability registered · ${data.scene}`,
+        detail: 'AG-59 confirmed the scene in its trusted registry. Physical execution is still pending explicit Apply scene.',
+        state: 'ready',
+        source: 'BACKEND',
+        confirmed: true,
+        requestId: data?.proof?.requestId || '',
+        backend: data?.proof?.backend || 'local_vllm + dmx_loopback'
+      });
+      lastExecutionBrief = '';
+      if (executeButton) {
+        executeButton.disabled = true;
+        executeButton.textContent = 'Scene registered · use Apply scene';
+      }
+    } else {
+      const duplicate = data.error === 'scene_already_exists';
+      setNativeActionHint(duplicate ? `Scene already exists · ${data.scene || 'refresh DMX registry'}` : `AUTO registration blocked · ${data.error || data.state || 'validation failed'}`, duplicate ? 'info' : 'error');
+      bubble(duplicate ? 'assistant' : 'error', 'AG-59 SCENE REGISTRY', duplicate ? `That scene already exists as ${data.scene || 'a registered scene'}. Refresh/select it above or use a different name.` : `Scene creation blocked: ${data.error || data.state || 'validation failed'}.`);
+      if (executeButton) {
+        executeButton.disabled = false;
+        executeButton.textContent = 'Execute proposed plan';
+      }
+    }
+  } catch (error) {
+    setNativeActionHint(`AUTO registration failed · ${error.message || 'request failed'}`, 'error');
+    bubble('error', 'AG-59 SCENE REGISTRY', `Scene registration failed: ${error.message || 'request failed'}.`);
+    if (executeButton) {
+      executeButton.disabled = false;
+      executeButton.textContent = 'Execute proposed plan';
+    }
+  } finally {
+    autoDmxRegistrationInFlight = false;
+  }
+}
+
+// The assistant reply is the proof that the local Copilot completed its proposal.
+// In AUTO, only the bounded native DMX registration path continues automatically.
+const nativeAutoObserver = new MutationObserver((mutations) => {
+  const assistantReplyAdded = mutations.some((mutation) => [...mutation.addedNodes].some((node) => node?.nodeType === 1 && node.matches?.('.bubble.assistant')));
+  if (assistantReplyAdded) window.setTimeout(autoRegisterDmxSceneIfEligible, 0);
+});
+if ($('copilotMessages')) nativeAutoObserver.observe($('copilotMessages'), { childList: true });
+
+// Explicit provider selection must stay explicit. Prevent the older AUTO-native
+// click interceptor from hijacking a DMX prompt when Codex/Cursor/AntiGravity/local
+// was intentionally chosen; the regular execution handler then dispatches that lane.
+document.addEventListener('click', (event) => {
+  const button = event.target?.closest?.('#executePlan');
+  if (!button) return;
+  const target = $('executorTarget')?.value || 'auto';
+  if (target === 'auto' || !isDmxSceneCreationPrompt(lastCopilotPrompt)) return;
+  const originalPrompt = lastCopilotPrompt;
+  lastCopilotPrompt = '';
+  window.setTimeout(() => {
+    if (!lastCopilotPrompt) lastCopilotPrompt = originalPrompt;
+  }, 0);
+}, true);
+
+$('executorTarget')?.addEventListener('change', () => {
+  autoDmxHandledPrompt = '';
+  setNativeActionHint('', 'info');
+});
+
+
+// Make AUTO semantics explicit in the visible controls.
+if ($('autoLaneBtn')) {
+  $('autoLaneBtn').textContent = 'AUTO · native actions + local-first';
+  $('autoLaneBtn').title = 'Safe native actions can run automatically; coding work is routed local-first.';
+}
+if ($('executorTarget')?.options?.[0]) $('executorTarget').options[0].textContent = 'Auto · native actions + InnerOS local-first';
+if (($('executorTarget')?.value || 'auto') === 'auto' && $('selectedExecutorLabel')) $('selectedExecutorLabel').textContent = 'AUTO · native + local-first';
