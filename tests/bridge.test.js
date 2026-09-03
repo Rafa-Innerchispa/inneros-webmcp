@@ -38,6 +38,7 @@ test('adapter endpoint resolution is ordered deduplicated and failover-ready', (
 
 test('mcp loopback includes server-side api key when configured', () => {
   assert.equal(buildMcpHeaders({ INNEROS_ADAPTER_TOKEN: 'secret-token' })['X-API-Key'], 'secret-token');
+  assert.equal(buildMcpHeaders({ MCP_API_KEY: 'mcp-key', INNEROS_ADAPTER_TOKEN: 'adapter-key' })['X-API-Key'], 'mcp-key');
   assert.equal(buildMcpHeaders({}, 'session-1')['mcp-session-id'], 'session-1');
   assert.equal(Object.hasOwn(buildMcpHeaders({}), 'X-API-Key'), false);
 });

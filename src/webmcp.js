@@ -77,11 +77,11 @@ const definitions = {
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
   },
   dmx_set_scene: {
-    description: 'Apply an allowlisted DMX scene through AG-59 / inneros-dmx-engine. Scenes: rainbow, frenzy, police, fire, chill_lounge, morado_uv, rojo_sangre, blackout.',
+    description: 'Apply an allowlisted DMX scene through AG-59 / inneros-dmx-engine. Scene must be reported by dmx_status supportedScenes (trusted local registry) or blackout.',
     inputSchema: {
       type: 'object',
       properties: {
-        scene: { type: 'string', enum: ['rainbow','frenzy','police','fire','chill_lounge','morado_uv','rojo_sangre','blackout'] },
+        scene: { type: 'string', maxLength: 64 },
         speed: { type: 'number', minimum: 0.1, maximum: 3 }
       },
       required: ['scene'],

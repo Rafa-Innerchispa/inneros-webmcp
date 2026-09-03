@@ -188,6 +188,26 @@ async function invoke(name, input = {}, { trace = true } = {}) {
   return data;
 }
 
+
+function formatDmxSceneLabel(scene = '') {
+  return String(scene).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function refreshDmxSceneSelector(supportedScenes = []) {
+  const select = $('dmxScene');
+  if (!select || !Array.isArray(supportedScenes) || !supportedScenes.length) return;
+  const selectable = supportedScenes.filter((scene) => scene && scene !== 'blackout');
+  if (!selectable.length) return;
+  const current = select.value;
+  select.replaceChildren(...selectable.map((scene) => {
+    const option = document.createElement('option');
+    option.value = scene;
+    option.textContent = formatDmxSceneLabel(scene);
+    return option;
+  }));
+  if (selectable.includes(current)) select.value = current;
+}
+
 function bubble(role, label, message) {
   const article = document.createElement('article');
   article.className = `bubble ${role}`;
@@ -478,11 +498,17 @@ async function boot() {
       title: registration.supported ? 'Browser registered WebMCP Site Tools' : 'Standard-browser compatibility mode',
       detail: registration.supported
         ? `${registration.registered.length} tools registered through document.modelContext.registerTool.`
-        : 'This browser does not expose document.modelContext. Nothing is broken: open this same URL in ChatGPT’s integrated browser to use the 8 Site Tools.',
+        : `This browser does not expose document.modelContext. Nothing is broken: open this same URL in ChatGPT’s integrated browser to use the ${health.webmcpTools || 11} Site Tools.`,
       state: registration.supported ? 'ok' : 'info',
       source: 'BROWSER',
       confirmed: false
     });
+    if (health.dmx?.configured) {
+      try {
+        const dmx = await invoke('dmx_status', {});
+        if (dmx.ok) await refreshDmxSceneSelector(dmx.supportedScenes || []);
+      } catch { /* non-fatal boot refresh */ }
+    }
     setFlowStage('archHuman', { confirmed: true });
     window.setTimeout(settleFlow, 900);
   } catch (error) {
@@ -501,6 +527,7 @@ $('logoutBtn')?.addEventListener('click', async () => {
 $('dmxStatusBtn')?.addEventListener('click', async () => {
   const data = await invoke('dmx_status', {});
   $('dmxState').textContent = data.ok ? `AG-59 ready · ${data.fixtureCount || 9} fixtures · effect ${data.currentEffect || 'idle'}` : `DMX unavailable · ${data.error || 'unknown'}`;
+  if (data.ok) await refreshDmxSceneSelector(data.supportedScenes || []);
   bubble('assistant', 'AG-59 DMX', data.ok ? `Stage status: ${data.running ? 'running' : 'idle'}. Supported scenes: ${(data.supportedScenes || []).join(', ')}.` : `DMX unavailable: ${data.error || 'engine offline'}`);
 });
 $('dmxSceneBtn')?.addEventListener('click', async () => {

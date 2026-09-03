@@ -123,7 +123,7 @@ async function readLimited(response) {
 
 export function buildMcpHeaders(env = process.env, sessionId = '') {
   const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
-  const token = String(env.INNEROS_ADAPTER_TOKEN || ADAPTER_TOKEN || '').trim();
+  const token = String(env.MCP_API_KEY || env.INNEROS_ADAPTER_TOKEN || ADAPTER_TOKEN || '').trim();
   if (token) headers['X-API-Key'] = token;
   if (sessionId) headers['mcp-session-id'] = sessionId;
   return headers;
@@ -376,20 +376,21 @@ async function directCall(tool, input = {}) {
 
   if (tool === 'dispatch_agent_action') {
     const correlationId = dispatchId('wmcp');
+    const projectId = String(input.project || input.project_id || 'inneros-webmcp').trim();
     if (input.agent === 'local') {
       const a2aTaskId = dispatchId('wmcp_a2a');
       const data = await callMcpTool('a2a_dispatch', {
-        agent_id: 'AG-45', title: `WebMCP: ${input.project || 'InnerOS'} action`,
+        agent_id: 'AG-45', title: `WebMCP: ${projectId} action`,
         body: input.instruction, correlation_id: correlationId,
-        context_id: input.project || 'inneros', priority: 'p0',
-        related_project: input.project || 'inneros', dry_run: false,
+        context_id: projectId, priority: 'p0',
+        related_project: projectId, dry_run: false,
         protocol_task_id: a2aTaskId
       });
       return sanitizePublic({ ok: data.ok !== false, state: 'queued', dispatchId: data.task?.a2a_task_id || a2aTaskId, agent: 'local', transport: 'a2a', executionClaimed: false, evidenceRequired: true });
     }
     const data = await callMcpTool('ide_dispatch_task', {
-      ide: input.agent, title: `WebMCP: ${input.project || 'InnerOS'} action`, body: input.instruction,
-      project_id: input.project, repo: '', branch: '', worktree: '', correlation_id: correlationId,
+      ide: input.agent, title: `WebMCP: ${projectId} action`, body: input.instruction,
+      project_id: projectId, repo: '', branch: '', worktree: '', correlation_id: correlationId,
       priority: 'p0', from_agent: 'WEBMCP', require_evidence: true,
       approval_required: false, idempotency_key: correlationId
     });
