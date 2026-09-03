@@ -1,11 +1,11 @@
 import { adapterConfigured, callInnerOS } from './inneros-adapter.js';
-import { askInnerOSCopilot, copilotStatus } from './copilot.js';
-import { dmxStatus, getDmxStatus, setDmxScene, runDmxBlackout } from './dmx-bridge.js';
+import { askInnerOSCopilot, copilotStatus, designDmxScene } from './copilot.js';
+import { dmxStatus, getDmxStatus, setDmxScene, runDmxBlackout, createDmxScene } from './dmx-bridge.js';
 
 const AGENTS = Object.freeze([
   { id: 'codex', label: 'Codex', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
   { id: 'cursor', label: 'Cursor', transport: 'remote inbox', capability: 'IDE delivery', verification: 'no fake headless' },
-  { id: 'antigravity', label: 'AntiGravity', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
+  { id: 'antigravity', label: 'AntiGravity', transport: 'remote inbox', capability: 'IDE delivery', verification: 'live execution requires returned session evidence' },
   { id: 'local', label: 'Local AMD', transport: 'local vLLM / A2A', capability: 'Qwen3-Coder 30B', verification: '$0 external inference' }
 ]);
 const ALLOWED_AGENTS = Object.freeze(AGENTS.map((agent) => agent.id));
@@ -135,6 +135,22 @@ export async function invokeTool(name, input = {}) {
       return { ok: true, dispatchId, evidence: record.evidence, state: record.state };
     }
     return unavailable(name);
+  }
+
+  if (name === 'dmx_create_scene') {
+    const description = safeText(input.description, 1800);
+    if (!description) return { ok: false, state: 'rejected', error: 'description_required' };
+    const designed = await designDmxScene(description);
+    if (!designed.ok) return designed;
+    const registered = await createDmxScene(designed.scene);
+    if (!registered.ok) return registered;
+    return {
+      ...registered,
+      designer: { provider: designed.provider, runtime: designed.runtime, model: designed.model },
+      designedScene: designed.scene,
+      executionClaimed: true,
+      physicalExecutionClaimed: false
+    };
   }
 
   if (name === 'dmx_status') return getDmxStatus();

@@ -7,6 +7,7 @@ export const TOOL_NAMES = [
   'resolve_project_blocker',
   'get_execution_trace',
   'get_evidence',
+  'dmx_create_scene',
   'dmx_status',
   'dmx_set_scene',
   'dmx_blackout'
@@ -71,6 +72,17 @@ const definitions = {
   get_evidence: {
     description: 'Retrieve sanitized completion evidence for a task or dispatch.',
     inputSchema: { type: 'object', properties: { taskId: { type: 'string', maxLength: 160 }, dispatchId: { type: 'string', maxLength: 200 } }, additionalProperties: false }
+  },
+  dmx_create_scene: {
+    description: 'Use the private local Qwen model to design one bounded declarative lighting scene from natural language, validate it again in AG-59, and register it in the live scene catalog without physically running it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', maxLength: 1800 }
+      },
+      required: ['description'],
+      additionalProperties: false
+    }
   },
   dmx_status: {
     description: 'Read-only status for the allowlisted AG-59 DMX stage orchestrator (fixture count, current effect, supported scenes). Never exposes private network topology.',
