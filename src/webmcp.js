@@ -7,6 +7,7 @@ export const TOOL_NAMES = [
   'resolve_project_blocker',
   'get_execution_trace',
   'get_evidence',
+  'dmx_create_scene',
   'dmx_status',
   'dmx_set_scene',
   'dmx_blackout'
@@ -15,15 +16,7 @@ export const TOOL_NAMES = [
 const definitions = {
   ask_inneros_copilot: {
     description: 'Ask the local InnerOS coding copilot for an English-only coding answer and execution brief. This tool never claims code execution.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        project: { type: 'string', maxLength: 120 },
-        message: { type: 'string', maxLength: 4000 }
-      },
-      required: ['message'],
-      additionalProperties: false
-    }
+    inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, message: { type: 'string', maxLength: 4000 } }, required: ['message'], additionalProperties: false }
   },
   list_agents: {
     description: 'List agent runtimes and verified capabilities exposed by the public-safe InnerOS bridge.',
@@ -39,30 +32,11 @@ const definitions = {
   },
   dispatch_agent_action: {
     description: 'Dispatch an allowlisted coding action to Codex, Cursor, AntiGravity, or the local InnerOS runtime and return a real dispatch reference.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agent: { type: 'string', enum: ['codex','cursor','antigravity','local'] },
-        project: { type: 'string', maxLength: 120 },
-        taskId: { type: 'string', maxLength: 160 },
-        instruction: { type: 'string', maxLength: 2000 }
-      },
-      required: ['agent','instruction'],
-      additionalProperties: false
-    }
+    inputSchema: { type: 'object', properties: { agent: { type: 'string', enum: ['codex','cursor','antigravity','local'] }, project: { type: 'string', maxLength: 120 }, taskId: { type: 'string', maxLength: 160 }, instruction: { type: 'string', maxLength: 2000 } }, required: ['agent','instruction'], additionalProperties: false }
   },
   resolve_project_blocker: {
     description: 'Diagnose a project blocker, select the cheapest capable allowlisted resource under local-first policy, dispatch the repair, and return trace/evidence references.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        project: { type: 'string', maxLength: 120 },
-        policy: { type: 'string', enum: ['local_first','best_available'], default: 'local_first' },
-        instruction: { type: 'string', maxLength: 2000 }
-      },
-      required: ['project'],
-      additionalProperties: false
-    }
+    inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, policy: { type: 'string', enum: ['local_first','best_available'], default: 'local_first' }, instruction: { type: 'string', maxLength: 2000 } }, required: ['project'], additionalProperties: false }
   },
   get_execution_trace: {
     description: 'Read sanitized backend-confirmed execution events for a dispatched action.',
@@ -72,21 +46,17 @@ const definitions = {
     description: 'Retrieve sanitized completion evidence for a task or dispatch.',
     inputSchema: { type: 'object', properties: { taskId: { type: 'string', maxLength: 160 }, dispatchId: { type: 'string', maxLength: 200 } }, additionalProperties: false }
   },
+  dmx_create_scene: {
+    description: 'Use the private local Qwen model to design one bounded declarative lighting scene from natural language, validate it again in AG-59, and register it in the live scene catalog without physically running it.',
+    inputSchema: { type: 'object', properties: { description: { type: 'string', maxLength: 1800 } }, required: ['description'], additionalProperties: false }
+  },
   dmx_status: {
     description: 'Read-only status for the allowlisted AG-59 DMX stage orchestrator (fixture count, current effect, supported scenes). Never exposes private network topology.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
   },
   dmx_set_scene: {
     description: 'Apply an allowlisted DMX scene through AG-59 / inneros-dmx-engine. Scene must be reported by dmx_status supportedScenes (trusted local registry) or blackout.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        scene: { type: 'string', maxLength: 64 },
-        speed: { type: 'number', minimum: 0.1, maximum: 3 }
-      },
-      required: ['scene'],
-      additionalProperties: false
-    }
+    inputSchema: { type: 'object', properties: { scene: { type: 'string', maxLength: 64 }, speed: { type: 'number', minimum: 0.1, maximum: 3 } }, required: ['scene'], additionalProperties: false }
   },
   dmx_blackout: {
     description: 'Immediate safe blackout for all allowlisted DMX fixtures through AG-59.',
@@ -98,11 +68,7 @@ export function registerInnerOSWebMCP(modelContext, invoke) {
   if (!modelContext?.registerTool) return { supported: false, registered: [] };
   const registered = [];
   for (const name of TOOL_NAMES) {
-    modelContext.registerTool({
-      name,
-      ...definitions[name],
-      execute: async (input = {}) => invoke(name, input)
-    });
+    modelContext.registerTool({ name, ...definitions[name], execute: async (input = {}) => invoke(name, input) });
     registered.push(name);
   }
   return { supported: true, registered };

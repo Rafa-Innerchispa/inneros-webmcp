@@ -696,3 +696,55 @@ function startDmxRegistryPolling() {
 }
 
 window.setTimeout(startDmxRegistryPolling, 1200);
+
+
+function isDmxSceneCreationPrompt(text = '') {
+  const value = String(text || '').toLowerCase();
+  return /(crea|crear|cree|nueva|nuevo|create|make|build|design)/.test(value)
+    && /(escena|scene|efecto|effect)/.test(value)
+    && /(dmx|luz|luces|light|lights|iluminaci[oó]n)/.test(value);
+}
+
+async function interceptDmxSceneCreation(event) {
+  if (!isDmxSceneCreationPrompt(lastCopilotPrompt)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const button = $('executePlan');
+  button.disabled = true;
+  button.textContent = 'Designing + registering scene…';
+  setFlowStage('archWebmcp');
+  try {
+    const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
+    resultEl.textContent = JSON.stringify(data, null, 2);
+    if (data.ok) {
+      await refreshDmxSceneSelector(data.supportedScenes || []);
+      const select = $('dmxScene');
+      if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
+      $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
+      bubble('assistant', 'AG-59 + LOCAL QWEN', `Scene ${data.label || data.scene} was designed by the local model, validated and registered by AG-59. It is now selected above. Registration did not physically run the lights; press Apply scene when you are ready.`);
+      addTrace({
+        title: `Scene ready to execute · ${data.scene}`,
+        detail: 'Registration is confirmed. Physical execution remains separate until Apply scene is pressed.',
+        state: 'registered',
+        source: 'BACKEND',
+        confirmed: true,
+        requestId: data?.proof?.requestId || '',
+        backend: data?.proof?.backend || 'local_vllm + dmx_loopback'
+      });
+    } else {
+      bubble('error', 'AG-59 SCENE REGISTRY', `Scene creation blocked: ${data.error || data.state || 'validation failed'}.`);
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Execute proposed plan';
+  }
+}
+
+$('executePlan')?.addEventListener('click', interceptDmxSceneCreation, { capture: true });
+
+window.addEventListener('DOMContentLoaded', () => {
+  const heroSub = document.querySelector('.recording-hero-copy .hero-sub');
+  if (heroSub) heroSub.textContent = heroSub.textContent.replace(/\b11 WebMCP\b/g, '12 WebMCP');
+  const toolCount = $('toolCount');
+  if (toolCount && toolCount.textContent.trim() === '11 WebMCP') toolCount.textContent = '12 WebMCP';
+});
