@@ -183,10 +183,24 @@ async function callMcpTool(name, args = {}) {
   if (!DIRECT_MCP_TOOLS.has(name)) throw new Error('inneros_internal_tool_not_allowlisted');
   const url = resolveMcpUrl();
   if (!url) throw new Error('inneros_mcp_loopback_not_configured');
+  let effectiveArgs = args;
+  if (name === 'ide_dispatch_task' && !String(args.repo || '').trim()) {
+    const projectId = String(args.project_id || '').trim();
+    if (!projectId) throw new Error('verified_project_binding_required');
+    const runtime = await callMcpTool('project_runtime_status', { project_id: projectId, node: 'primary' });
+    const binding = resolveProjectBinding(runtime, projectId);
+    if (!binding.ok) throw new Error(binding.error || 'verified_project_binding_required');
+    effectiveArgs = { ...args, repo: binding.repo, branch: binding.branch };
+    delete effectiveArgs.project_id;
+  }
   const sessionId = await openMcpSession(url);
-  const call = await mcpPost(url, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }, sessionId);
+  const call = await mcpPost(url, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: effectiveArgs } }, sessionId);
   if (!call.response.ok) throw new Error(`inneros_mcp_call_http_${call.response.status}`);
-  return unwrapMcpResult(call.rpc);
+  const result = unwrapMcpResult(call.rpc);
+  if (name === 'ide_task_status') {
+    return { ...result, execution_state: canonicalIdeState(result), evidence: canonicalIdeEvidence(result) };
+  }
+  return result;
 }
 
 function publicAgentList(fabric = {}) {
@@ -257,6 +271,36 @@ function dispatchId(prefix = 'wmcp') {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+export function resolveProjectBinding(data = {}, requestedProject = '') {
+  const project = data.project || {};
+  const repo = String(project.repo || '').trim();
+  const branch = String(project.default_branch || project.defaultBranch || project.base_ref || project.baseRef || 'main').trim();
+  if (data.ok === false || data.exists === false || !repo) {
+    return {
+      ok: false,
+      state: 'blocked',
+      error: 'verified_project_binding_required',
+      project: project.project_id || requestedProject || null
+    };
+  }
+  return { ok: true, project: project.project_id || requestedProject, repo, branch };
+}
+
+export function canonicalIdeState(status = {}) {
+  const opsState = String(status.ops_status || '').toLowerCase();
+  const executionState = String(status.execution_state || '').toLowerCase();
+  const terminalOpsStates = new Set(['completed', 'failed', 'cancelled', 'rejected', 'blocked']);
+  if (terminalOpsStates.has(opsState)) return opsState;
+  return executionState || opsState || 'unknown';
+}
+
+export function canonicalIdeEvidence(status = {}) {
+  const opsEvidence = status.ops_evidence && typeof status.ops_evidence === 'object' ? status.ops_evidence : {};
+  const executionEvidence = status.evidence && typeof status.evidence === 'object' ? status.evidence : {};
+  if (Object.keys(opsEvidence).length) return opsEvidence;
+  return executionEvidence;
+}
+
 async function directCall(tool, input = {}) {
   if (tool === 'list_agents') return publicAgentList(await callMcpTool('inneros_agent_fabric_status', {}));
 
@@ -290,7 +334,7 @@ async function directCall(tool, input = {}) {
     }
     const data = await callMcpTool('ide_dispatch_task', {
       ide: input.agent, title: `WebMCP: ${input.project || 'InnerOS'} action`, body: input.instruction,
-      repo: '', branch: '', worktree: '', correlation_id: correlationId,
+      project_id: input.project, repo: '', branch: '', worktree: '', correlation_id: correlationId,
       priority: 'p0', from_agent: 'WEBMCP', require_evidence: true,
       approval_required: false, idempotency_key: correlationId
     });

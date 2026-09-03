@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { invokeTool, ALLOWED_AGENTS, ALLOWED_ACTIONS } from '../src/bridge.js';
 import { TOOL_NAMES, registerInnerOSWebMCP } from '../src/webmcp.js';
-import { buildMcpHeaders, parseMcpPayload, resolveAdapterUrls } from '../src/inneros-adapter.js';
+import { buildMcpHeaders, canonicalIdeEvidence, canonicalIdeState, parseMcpPayload, resolveAdapterUrls, resolveProjectBinding } from '../src/inneros-adapter.js';
 
 test('registers all WebMCP tools when browser API exists', () => {
   const seen = [];
