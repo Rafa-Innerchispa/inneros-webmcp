@@ -5,6 +5,7 @@ const ADAPTER_TOKEN = process.env.INNEROS_ADAPTER_TOKEN || '';
 const PUBLIC_TOOLS = new Set([
   'list_agents',
   'get_project_status',
+  'create_project_workspace',
   'inspect_blockers',
   'dispatch_agent_action',
   'resolve_project_blocker',
@@ -15,14 +16,17 @@ const PUBLIC_TOOLS = new Set([
 export const DIRECT_MCP_TOOL_ALLOWLIST = Object.freeze([
   'inneros_agent_fabric_status',
   'project_runtime_status',
+  'local_project_bootstrap',
   'dev_swarm_watchdog_summary',
   'resource_fabric_route',
   'a2a_dispatch',
   'a2a_task_status',
   'ide_dispatch_task',
-  'ide_task_status'
+  'ide_task_status',
+  'execute_provider_task'
 ]);
 const DIRECT_MCP_TOOLS = new Set(DIRECT_MCP_TOOL_ALLOWLIST);
+const PROJECTS_ROOT = '/home/rlopez/projects';
 
 export function resolveAdapterUrls(env = process.env) {
   const candidates = [
@@ -147,7 +151,7 @@ async function openMcpSession(url) {
     jsonrpc: '2.0', id: 1, method: 'initialize',
     params: {
       protocolVersion: '2025-06-18', capabilities: {},
-      clientInfo: { name: 'inneros-webmcp', version: '0.2.0' }
+      clientInfo: { name: 'inneros-webmcp', version: '0.3.0' }
     }
   });
   if (!init.response.ok) throw new Error(`inneros_mcp_initialize_http_${init.response.status}`);
@@ -174,14 +178,14 @@ export function unwrapMcpResult(rpc) {
       try {
         const parsed = JSON.parse(structured.result);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-      } catch { /* fall through to the structured envelope */ }
+      } catch { /* fall through */ }
     }
     if (structured.result && typeof structured.result === 'object' && !Array.isArray(structured.result)) return structured.result;
     if (typeof structured.data === 'string') {
       try {
         const parsed = JSON.parse(structured.data);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-      } catch { /* fall through to the structured envelope */ }
+      } catch { /* fall through */ }
     }
     if (structured.data && typeof structured.data === 'object' && !Array.isArray(structured.data)) return structured.data;
     return structured;
@@ -238,8 +242,8 @@ async function callMcpTool(name, args = {}) {
     if (!projectId) throw new Error('verified_project_binding_required');
     const runtime = await callMcpTool('project_runtime_status', { project_id: projectId, node: 'primary' });
     const binding = resolveProjectBinding(runtime, projectId);
-    if (!binding.ok) throw new Error(binding.error || 'verified_project_binding_required');
-    effectiveArgs = { ...args, repo: binding.repo, branch: binding.branch };
+    if (!binding.ok || !binding.repo) throw new Error(binding.error || 'verified_project_binding_required');
+    effectiveArgs = { ...args, repo: binding.repo, branch: binding.branch, worktree: binding.worktree };
     delete effectiveArgs.project_id;
   }
   const sessionId = await openMcpSession(url);
@@ -297,6 +301,7 @@ function publicAgentList(fabric = {}) {
 
 function publicProject(data = {}, project) {
   const p = data.project || {};
+  const projectPath = String(data.project_path || '');
   return {
     ok: data.ok !== false,
     state: data.exists === false ? 'not_found' : 'ready',
@@ -304,6 +309,7 @@ function publicProject(data = {}, project) {
     repo: p.repo || null,
     exists: Boolean(data.exists),
     isGit: Boolean(data.is_git),
+    workspace: projectPath.startsWith(`${PROJECTS_ROOT}/`) ? 'Projects' : 'registered runtime',
     policyClass: p.policy_class || null,
     writeScope: p.write_scope || null,
     node: data.node || 'primary'
@@ -330,7 +336,8 @@ export function resolveProjectBinding(data = {}, requestedProject = '') {
   const project = data.project || {};
   const repo = String(project.repo || '').trim();
   const branch = String(project.default_branch || project.defaultBranch || project.base_ref || project.baseRef || 'main').trim();
-  if (data.ok === false || data.exists === false || !repo) {
+  const worktree = String(data.project_path || '').trim();
+  if (data.ok === false || data.exists === false || data.is_git === false || !worktree) {
     return {
       ok: false,
       state: 'blocked',
@@ -338,7 +345,7 @@ export function resolveProjectBinding(data = {}, requestedProject = '') {
       project: project.project_id || requestedProject || null
     };
   }
-  return { ok: true, project: project.project_id || requestedProject, repo, branch };
+  return { ok: true, project: project.project_id || requestedProject, repo, branch, worktree };
 }
 
 export function canonicalIdeState(status = {}) {
@@ -356,12 +363,57 @@ export function canonicalIdeEvidence(status = {}) {
   return executionEvidence;
 }
 
+function providerDispatchSummary(data = {}, agent) {
+  const dispatch = data.dispatch || data;
+  return sanitizePublic({
+    ok: data.ok !== false && dispatch.ok !== false,
+    state: data.execution_state || dispatch.execution_state || 'queued',
+    dispatchId: dispatch.dispatch_id || data.dispatch_id || '',
+    agent,
+    deliveryState: dispatch.delivery_state || data.delivery_state || '',
+    executionState: data.execution_state || dispatch.execution_state || 'queued',
+    transport: dispatch.transport || data.transport || 'provider_execution_fabric',
+    executionClaimed: ['running','verification','completed'].includes(String(data.execution_state || dispatch.execution_state || '').toLowerCase())
+  });
+}
+
 async function directCall(tool, input = {}) {
   if (tool === 'list_agents') return publicAgentList(await callMcpTool('inneros_agent_fabric_status', {}));
 
   if (tool === 'get_project_status') {
     const data = await callMcpTool('project_runtime_status', { project_id: input.project, node: 'primary' });
     return publicProject(data, input.project);
+  }
+
+  if (tool === 'create_project_workspace') {
+    const projectId = String(input.project || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(projectId)) return { ok: false, state: 'rejected', error: 'project_name_invalid' };
+    const existing = await callMcpTool('project_runtime_status', { project_id: projectId, node: 'primary' });
+    if (existing?.exists) return { ok: false, state: 'conflict', error: 'project_already_exists', project: publicProject(existing, projectId) };
+    const projectPath = `${PROJECTS_ROOT}/${projectId}`;
+    const correlationId = dispatchId('wmcp_project');
+    const created = await callMcpTool('local_project_bootstrap', {
+      path: projectPath,
+      project_name: projectId,
+      actor: 'WEBMCP',
+      task_id: correlationId,
+      correlation_id: correlationId,
+      description: String(input.description || '').slice(0, 500),
+      github_owner: 'Rafa-Innerchispa',
+      create_remote: false,
+      private: true
+    });
+    if (created?.ok === false) return sanitizePublic({ ok: false, state: 'blocked', error: created.error || 'project_bootstrap_failed' });
+    const finalStatus = await callMcpTool('project_runtime_status', { project_id: projectId, node: 'primary' });
+    return {
+      ...publicProject(finalStatus, projectId),
+      ok: finalStatus?.exists === true && finalStatus?.is_git === true,
+      state: 'created',
+      localGit: true,
+      remoteCreated: false,
+      location: 'Projects workspace',
+      executionClaimed: true
+    };
   }
 
   if (tool === 'inspect_blockers') {
@@ -377,6 +429,10 @@ async function directCall(tool, input = {}) {
   if (tool === 'dispatch_agent_action') {
     const correlationId = dispatchId('wmcp');
     const projectId = String(input.project || input.project_id || 'inneros-webmcp').trim();
+    const runtime = await callMcpTool('project_runtime_status', { project_id: projectId, node: 'primary' });
+    const binding = resolveProjectBinding(runtime, projectId);
+    if (!binding.ok) return binding;
+
     if (input.agent === 'local') {
       const a2aTaskId = dispatchId('wmcp_a2a');
       const data = await callMcpTool('a2a_dispatch', {
@@ -388,22 +444,33 @@ async function directCall(tool, input = {}) {
       });
       return sanitizePublic({ ok: data.ok !== false, state: 'queued', dispatchId: data.task?.a2a_task_id || a2aTaskId, agent: 'local', transport: 'a2a', executionClaimed: false, evidenceRequired: true });
     }
-    const data = await callMcpTool('ide_dispatch_task', {
-      ide: input.agent, title: `WebMCP: ${projectId} action`, body: input.instruction,
-      project_id: projectId, repo: '', branch: '', worktree: '', correlation_id: correlationId,
-      priority: 'p0', from_agent: 'WEBMCP', require_evidence: true,
-      approval_required: false, idempotency_key: correlationId
+
+    const data = await callMcpTool('execute_provider_task', {
+      provider: input.agent,
+      title: `WebMCP: ${projectId} action`,
+      body: input.instruction,
+      repo: binding.repo,
+      branch: binding.branch,
+      worktree: binding.worktree,
+      correlation_id: correlationId,
+      priority: 'p0',
+      from_agent: 'WEBMCP',
+      dry_run: false,
+      require_evidence: true,
+      idempotency_key: correlationId
     });
-    return sanitizePublic({ ok: data.ok !== false, state: data.execution_state || 'queued', dispatchId: data.dispatch_id, agent: input.agent, deliveryState: data.delivery_state, executionState: data.execution_state, transport: data.transport, executionClaimed: data.execution_state === 'running' || data.execution_state === 'completed' });
+    return providerDispatchSummary(data, input.agent);
   }
 
   if (tool === 'resolve_project_blocker') {
     const project = await callMcpTool('project_runtime_status', { project_id: input.project, node: 'primary' });
+    const binding = resolveProjectBinding(project, input.project);
+    if (!binding.ok) return binding;
     const route = await callMcpTool('resource_fabric_route', { project_id: input.project, task_class: 'coding', prefer_cloud: input.policy === 'best_available' });
     const a2aTaskId = dispatchId('wmcp_a2a');
     const instruction = input.instruction || 'Diagnose the current development blocker, resolve it safely, run bounded tests, and attach evidence.';
     const dispatched = await callMcpTool('a2a_dispatch', {
-      agent_id: 'AG-45', title: `Resolve blocker: ${input.project}`, body: instruction,
+      agent_id: 'AG-45', title: `Approved WebMCP plan: ${input.project}`, body: instruction,
       correlation_id: dispatchId('wmcp_resolve'), context_id: input.project,
       priority: 'p0', related_project: input.project, dry_run: false,
       protocol_task_id: a2aTaskId
@@ -417,9 +484,9 @@ async function directCall(tool, input = {}) {
       route: publicRoute(route),
       dispatchId: id,
       trace: [
-        { stage: 'diagnose', state: project.ok === false ? 'blocked' : 'pass', detail: 'Project runtime checked live.' },
+        { stage: 'validate', state: 'pass', detail: 'Project runtime and Git workspace verified live.' },
         { stage: 'route', state: route.ok === false ? 'blocked' : 'pass', detail: `Selected ${publicRoute(route).provider || 'local-capable resource'} under ${(input.policy || 'local_first')} policy.` },
-        { stage: 'dispatch', state: 'queued', detail: 'Durable A2A task submitted to Local Exec.' },
+        { stage: 'dispatch', state: 'queued', detail: 'Approved durable A2A task submitted to Local Exec.' },
         { stage: 'verify', state: 'pending', detail: 'Completion evidence will be available through get_evidence.' }
       ]
     });

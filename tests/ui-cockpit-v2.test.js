@@ -66,3 +66,39 @@ test('explicit provider lanes remain explicit after approval-first change', () =
   assert.match(approvedBody, /agent: target/);
   assert.match(approvedBody, /target === 'auto'/);
 });
+
+
+test('development workspace exposes explicit project creation without implicit GitHub creation', () => {
+  assert.match(app, /Create Project/);
+  assert.match(app, /create_project_workspace/);
+  assert.match(app, /No GitHub\/cloud repository was created/);
+  assert.match(app, /verifyDevelopmentProject/);
+});
+
+test('project files become read-only Copilot context and follow the refined plan', () => {
+  assert.match(app, /Attach PDF \/ code/);
+  assert.match(app, /\/api\/context\/upload/);
+  assert.match(app, /conversationHistoryForModel/);
+  assert.match(app, /contextText\(/);
+  assert.match(app, /READ-ONLY ATTACHED PROJECT CONTEXT/);
+});
+
+test('voice control is dictation only and does not bypass approval', () => {
+  assert.match(app, /SpeechRecognition/);
+  assert.match(app, /webkitSpeechRecognition/);
+  assert.match(app, /Dictation only; it never executes a plan/);
+  assert.match(app, /Approve & Execute Plan/);
+});
+
+
+const serverSource = fs.readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
+
+test('voice is local-first through on-prem Whisper with explicit browser fallback', () => {
+  assert.match(app, /Local voice/);
+  assert.match(app, /MediaRecorder/);
+  assert.match(app, /\/api\/voice\/transcribe/);
+  assert.match(app, /Browser fallback/);
+  assert.match(serverSource, /127\.0\.0\.1:9001\/asr/);
+  assert.match(serverSource, /provider: 'Local Whisper'/);
+  assert.match(serverSource, /executionClaimed: false/);
+});

@@ -2,17 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canonicalIdeEvidence, canonicalIdeState, findIdeDispatchPayload, resolveProjectBinding } from '../src/inneros-adapter.js';
 
-test('external execution requires a verified project repo binding', () => {
-  const bound = resolveProjectBinding({
+test('execution accepts a verified local Git workspace even without a remote repo', () => {
+  const remoteBound = resolveProjectBinding({
     ok: true,
     exists: true,
+    is_git: true,
+    project_path: '/home/rlopez/projects/inneros-webmcp',
     project: { project_id: 'inneros-webmcp', repo: 'Rafa-Innerchispa/inneros-webmcp' }
   }, 'inneros-webmcp');
-  assert.equal(bound.ok, true);
-  assert.equal(bound.repo, 'Rafa-Innerchispa/inneros-webmcp');
-  assert.equal(bound.branch, 'main');
+  assert.equal(remoteBound.ok, true);
+  assert.equal(remoteBound.repo, 'Rafa-Innerchispa/inneros-webmcp');
+  assert.equal(remoteBound.branch, 'main');
+  assert.match(remoteBound.worktree, /inneros-webmcp$/);
 
-  const missing = resolveProjectBinding({ ok: true, exists: true, project: {} }, 'missing');
+  const localOnly = resolveProjectBinding({
+    ok: true,
+    exists: true,
+    is_git: true,
+    project_path: '/home/rlopez/projects/new-local-project',
+    project: { project_id: 'new-local-project' }
+  }, 'new-local-project');
+  assert.equal(localOnly.ok, true);
+  assert.equal(localOnly.repo, '');
+  assert.equal(localOnly.branch, 'main');
+  assert.match(localOnly.worktree, /new-local-project$/);
+
+  const missing = resolveProjectBinding({ ok: true, exists: true, is_git: false, project: {} }, 'missing');
   assert.equal(missing.ok, false);
   assert.equal(missing.error, 'verified_project_binding_required');
 });

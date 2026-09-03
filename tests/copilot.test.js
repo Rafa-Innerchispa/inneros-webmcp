@@ -42,13 +42,39 @@ test('copilot returns answer and bounded execution brief without claiming execut
   assert.match(requestBody.messages[0].content, /do NOT execute code yourself/);
 });
 
+test('copilot uses bounded conversation history and attached project context', async () => {
+  let requestBody = null;
+  const result = await askInnerOSCopilot({
+    project: 'demo-project',
+    message: 'Now make the parser strict',
+    history: [
+      { role: 'user', content: 'Build a parser' },
+      { role: 'assistant', content: 'I propose a JSON parser. EXECUTION BRIEF: Add parser.' }
+    ],
+    context: 'FILE parser.js\nexport function parse(v) { return JSON.parse(v); }'
+  }, {
+    env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-model' },
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return { ok: true, async json() { return { choices: [{ message: { content: 'Refine validation. EXECUTION BRIEF: Make parser validation strict.' } }] }; } };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.historyTurnsUsed, 2);
+  assert.ok(result.contextCharsUsed > 10);
+  assert.equal(requestBody.messages[1].role, 'user');
+  assert.equal(requestBody.messages[2].role, 'assistant');
+  assert.match(requestBody.messages[3].content, /ATTACHED PROJECT CONTEXT/);
+  assert.match(requestBody.messages[3].content, /parser\.js/);
+  assert.equal(requestBody.messages.at(-1).content, 'Now make the parser strict');
+});
+
 test('copilot fails truthfully when not configured', async () => {
   const result = await askInnerOSCopilot({ message: 'write code' }, { env: {}, fetchImpl: async () => { throw new Error('should not call'); } });
   assert.equal(result.ok, false);
   assert.equal(result.state, 'unavailable');
   assert.equal(result.error, 'local_copilot_not_configured');
 });
-
 
 test('local model can design a bounded DMX scene as structured JSON without executing it', async () => {
   const { designDmxScene } = await import('../src/copilot.js');
@@ -74,8 +100,7 @@ test('local model can design a bounded DMX scene as structured JSON without exec
   assert.equal(result.executionClaimed, false);
 });
 
-
-test('DMX scene intent is tagged as a safe native AUTO action', async () => {
+test('DMX scene intent is tagged but never auto-runnable during conversation', async () => {
   const { isDmxSceneCreationIntent } = await import('../src/copilot.js');
   assert.equal(isDmxSceneCreationIntent('crea una escena nueva paera todas las luces demx que funiconen como flash en azul y ponle el nombre flash blue'), true);
   assert.equal(isDmxSceneCreationIntent('fix the README typo'), false);
@@ -88,14 +113,14 @@ test('DMX scene intent is tagged as a safe native AUTO action', async () => {
     env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-model' },
     fetchImpl: async (_url, options) => {
       requestBody = JSON.parse(options.body);
-      return { ok: true, async json() { return { choices: [{ message: { content: 'AUTO can register this bounded AG-59 scene without running the fixtures.\nEXECUTION BRIEF: Register a safe slow red flash scene named Flash Rojo.' } }] }; } };
+      return { ok: true, async json() { return { choices: [{ message: { content: 'We can refine the scene. EXECUTION BRIEF: Register a safe slow red flash scene named Flash Rojo after approval.' } }] }; } };
     }
   });
   assert.equal(result.ok, true);
   assert.equal(result.nativeAction, 'dmx_create_scene');
-  assert.equal(result.autoRunnable, true);
+  assert.equal(result.autoRunnable, false);
   assert.match(requestBody.messages[0].content, /Do NOT propose raw DMX addresses/);
-  assert.match(requestBody.messages[0].content, /flashes faster than 650ms/);
+  assert.match(requestBody.messages[0].content, /after explicit Approve & Execute/);
 });
 
 test('DMX designer prompt preserves explicit names and converts flash to bounded color-blackout pulses', async () => {
@@ -118,7 +143,6 @@ test('DMX designer prompt preserves explicit names and converts flash to bounded
   assert.match(requestBody.messages[0].content, /alternate that requested color with blackout/);
 });
 
-
 test('DMX Copilot cannot claim registration before AG-59 evidence exists', async () => {
   const result = await askInnerOSCopilot({
     project: 'inneros-webmcp',
@@ -134,8 +158,8 @@ test('DMX Copilot cannot claim registration before AG-59 evidence exists', async
   });
   assert.equal(result.ok, true);
   assert.equal(result.nativeAction, 'dmx_create_scene');
-  assert.match(result.message, /No scene has been registered yet/);
-  assert.match(result.message, /will now ask the local Qwen scene designer/);
+  assert.match(result.message, /Nothing has been registered or executed/);
+  assert.match(result.message, /Approve & Execute/);
   assert.doesNotMatch(result.message, /has been created and registered/);
   assert.equal(result.executionClaimed, false);
 });

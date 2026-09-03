@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { invokeTool, ALLOWED_AGENTS, ALLOWED_ACTIONS } from '../src/bridge.js';
 import { TOOL_NAMES, registerInnerOSWebMCP } from '../src/webmcp.js';
-import { buildMcpHeaders, canonicalIdeEvidence, canonicalIdeState, parseMcpPayload, resolveAdapterUrls, resolveProjectBinding } from '../src/inneros-adapter.js';
+import { buildMcpHeaders, parseMcpPayload, resolveAdapterUrls } from '../src/inneros-adapter.js';
 
 test('registers all WebMCP tools when browser API exists', () => {
   const seen = [];
@@ -11,17 +11,19 @@ test('registers all WebMCP tools when browser API exists', () => {
   assert.equal(result.supported, true);
   assert.deepEqual(result.registered, TOOL_NAMES);
   assert.equal(seen.length, TOOL_NAMES.length);
+  assert.equal(TOOL_NAMES.length, 13);
   assert.ok(seen.every((tool) => typeof tool.execute === 'function'));
   assert.ok(seen.some((tool) => tool.name === 'ask_inneros_copilot'));
+  assert.ok(seen.some((tool) => tool.name === 'create_project_workspace'));
 });
 
 test('unsupported browser is explicit', () => {
   assert.deepEqual(registerInnerOSWebMCP(undefined, async () => ({})), { supported: false, registered: [] });
 });
 
-test('policy remains narrow', () => {
+test('policy remains narrow and project creation is explicit', () => {
   assert.deepEqual(ALLOWED_AGENTS, ['codex','cursor','antigravity','local']);
-  assert.deepEqual(ALLOWED_ACTIONS, ['inspect','dispatch','status','evidence','resolve']);
+  assert.deepEqual(ALLOWED_ACTIONS, ['inspect','dispatch','status','evidence','resolve','create_project']);
 });
 
 test('adapter endpoint resolution is ordered deduplicated and failover-ready', () => {
@@ -44,9 +46,7 @@ test('mcp loopback includes server-side api key when configured', () => {
 });
 
 test('mcp sse payload parser preserves tool error envelopes', () => {
-  const parsed = parseMcpPayload(`event: message
-data: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Unauthorized"}],"isError":true}}
-`);
+  const parsed = parseMcpPayload(`event: message\ndata: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Unauthorized"}],"isError":true}}\n`);
   assert.equal(parsed.result.isError, true);
   assert.equal(parsed.result.content[0].text, 'Unauthorized');
 });
@@ -62,6 +62,13 @@ test('copilot never falls through to execution', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.state, 'unavailable');
   assert.equal(result.error, 'local_copilot_not_configured');
+});
+
+test('project creation validates names before any live write', async () => {
+  const result = await invokeTool('create_project_workspace', { project: '../escape' });
+  assert.equal(result.ok, false);
+  assert.equal(result.state, 'rejected');
+  assert.equal(result.error, 'project_name_invalid');
 });
 
 test('never fakes success without live adapter', async () => {
@@ -87,7 +94,6 @@ test('unknown tool rejected', async () => {
   const result = await invokeTool('execute_shell', {});
   assert.equal(result.error, 'tool_not_allowlisted');
 });
-
 
 test('DMX designed-scene aliases normalize before AG-59 validation', async () => {
   const { normalizeDmxDesignedScene } = await import('../src/bridge.js');
