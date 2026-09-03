@@ -748,3 +748,77 @@ window.addEventListener('DOMContentLoaded', () => {
   const toolCount = $('toolCount');
   if (toolCount && toolCount.textContent.trim() === '11 WebMCP') toolCount.textContent = '12 WebMCP';
 });
+
+
+// Cockpit V2: explicit executor selection UI. Lane cards are real selectors;
+// the animated architecture rail remains telemetry only.
+function executorLabel(value = '') {
+  const labels = {
+    auto: 'AUTO · local-first',
+    local: 'LOCAL AMD · headless A2A',
+    codex: 'CODEX · headless',
+    cursor: 'CURSOR · remote inbox',
+    antigravity: 'ANTIGRAVITY · remote inbox'
+  };
+  return labels[value] || String(value || 'AUTO').toUpperCase();
+}
+
+function syncSelectedExecutorUI() {
+  const select = $('executorTarget');
+  if (!select) return;
+  const value = select.value || 'auto';
+  const label = executorLabel(value);
+  if ($('selectedExecutorLabel')) $('selectedExecutorLabel').textContent = label;
+  if ($('autoLaneBtn')) {
+    $('autoLaneBtn').classList.toggle('selected', value === 'auto');
+    $('autoLaneBtn').setAttribute('aria-pressed', value === 'auto' ? 'true' : 'false');
+  }
+  document.querySelectorAll('#agents article').forEach((card) => {
+    const selected = card.dataset.agent === value;
+    card.classList.toggle('selected', selected);
+    card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+}
+
+function decorateLaneCards() {
+  document.querySelectorAll('#agents article').forEach((card) => {
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `Select execution lane ${card.dataset.agent || ''}`.trim());
+  });
+  syncSelectedExecutorUI();
+}
+
+$('autoLaneBtn')?.addEventListener('click', () => {
+  $('executorTarget').value = 'auto';
+  syncSelectedExecutorUI();
+  addTrace({
+    title: 'Execution routing · AUTO local-first',
+    detail: 'InnerOS will choose the cheapest capable local-first route. This selection does not claim execution.',
+    state: 'info', source: 'BROWSER', confirmed: false
+  });
+});
+
+$('executorTarget')?.addEventListener('change', () => {
+  syncSelectedExecutorUI();
+  addTrace({
+    title: `Execution target selected · ${executorLabel($('executorTarget').value)}`,
+    detail: 'Executor selection changed. No task has executed yet.',
+    state: 'info', source: 'BROWSER', confirmed: false
+  });
+});
+
+$('agents')?.addEventListener('click', () => window.setTimeout(syncSelectedExecutorUI, 0));
+$('agents')?.addEventListener('keydown', (event) => {
+  const card = event.target.closest('article[data-agent]');
+  if (!card || !['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  card.click();
+  syncSelectedExecutorUI();
+});
+
+if ($('agents')) {
+  const laneObserver = new MutationObserver(decorateLaneCards);
+  laneObserver.observe($('agents'), { childList: true });
+}
+decorateLaneCards();

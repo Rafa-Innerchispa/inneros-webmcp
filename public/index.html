@@ -7,30 +7,60 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="network-bg" aria-hidden="true"><span></span><span></span></div>
-  <main class="page recording-page">
-    <section class="hero recording-hero">
-      <div class="hero-copy recording-hero-copy">
-        <p class="eyebrow">INNEROS · WEBMCP · LIVE AGENT CONTROL PLANE</p>
-        <h1>Ask. Execute. Watch the proof.</h1>
-        <p class="hero-sub">Local Qwen3-Coder, 11 WebMCP Site Tools, MCP/A2A execution, real provider lanes and AG-59 physical DMX control. Browser events and backend-confirmed evidence stay visibly separate.</p>
+  <div class="network-bg cockpit-ambient" aria-hidden="true"><span></span><span></span></div>
+  <main class="page recording-page cockpit-v2">
+    <section class="hero recording-hero cockpit-shell">
+      <header class="brand-bar">
+        <div class="brand-lockup" aria-label="InnerChispa InnerOS">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" role="img">
+              <defs>
+                <linearGradient id="sparkGradient" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7c5cff"/>
+                  <stop offset="0.52" stop-color="#9a7cff"/>
+                  <stop offset="1" stop-color="#49d9ff"/>
+                </linearGradient>
+              </defs>
+              <path fill="url(#sparkGradient)" d="M34.8 3.5 39 24.8l20.8 6.5-20.2 8.1L37 60.5l-8.1-20.1L8 35.8l19.2-9.1z"/>
+              <circle cx="46" cy="16" r="4.2" fill="#49d9ff" opacity=".9"/>
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <strong>INNERCHISPA</strong>
+            <span>InnerOS · WebMCP Mission Control</span>
+          </div>
+        </div>
+        <div class="brand-pulse" aria-label="Live local control plane">
+          <i></i><span>LOCAL-FIRST CONTROL PLANE</span>
+        </div>
+      </header>
+
+      <div class="hero-copy recording-hero-copy cockpit-intro">
+        <div>
+          <p class="eyebrow">WEBMCP · MCP/A2A · PHYSICAL + SOFTWARE EXECUTION</p>
+          <h1>Ask. Route. Execute. Watch the proof.</h1>
+        </div>
+        <p class="hero-sub">Local Qwen3-Coder, 12 WebMCP Site Tools, four truthful execution lanes and AG-59 physical DMX control. Browser intent and backend-confirmed evidence stay visibly separate.</p>
       </div>
 
-      <section class="architecture flow-rail recording-flow" id="flowRail" aria-label="Live execution flow">
-        <div class="arch-node verified" id="archHuman" data-stage="human"><small>YOU</small><strong>Prompt</strong><em>Input</em></div>
-        <span class="arch-link"><i></i>→</span>
-        <div class="arch-node" id="archWebmcp" data-stage="webmcp"><small>WEBMCP</small><strong>Site Tools</strong><em>Browser API</em></div>
-        <span class="arch-link"><i></i>→</span>
-        <div class="arch-node" id="archBridge" data-stage="bridge"><small>INNEROS</small><strong>Safe bridge</strong><em>Policy</em></div>
-        <span class="arch-link"><i></i>→</span>
-        <div class="arch-node" id="archMcp" data-stage="mcp"><small>MCP / A2A</small><strong>Agent fabric</strong><em>Handshake</em></div>
-        <span class="arch-link"><i></i>→</span>
-        <div class="arch-node" id="archExecutor" data-stage="executor"><small>EXECUTOR</small><strong>4 lanes</strong><em>Run</em></div>
-        <span class="arch-link"><i></i>→</span>
-        <div class="arch-node" id="archEvidence" data-stage="evidence"><small>EVIDENCE</small><strong>Trace + proof</strong><em>Verify</em></div>
+      <section class="flow-wrap" aria-label="Execution telemetry">
+        <div class="flow-caption"><span>LIVE FLOW TELEMETRY</span><small>Animated status path · not clickable controls</small></div>
+        <section class="architecture flow-rail recording-flow" id="flowRail" aria-label="Live execution flow telemetry">
+          <div class="arch-node verified" id="archHuman" data-stage="human"><small>YOU</small><strong>Prompt</strong><em>Input</em></div>
+          <span class="arch-link"><i></i>→</span>
+          <div class="arch-node" id="archWebmcp" data-stage="webmcp"><small>WEBMCP</small><strong>Site Tools</strong><em>Browser API</em></div>
+          <span class="arch-link"><i></i>→</span>
+          <div class="arch-node" id="archBridge" data-stage="bridge"><small>INNEROS</small><strong>Safe bridge</strong><em>Policy</em></div>
+          <span class="arch-link"><i></i>→</span>
+          <div class="arch-node" id="archMcp" data-stage="mcp"><small>MCP / A2A</small><strong>Agent fabric</strong><em>Handshake</em></div>
+          <span class="arch-link"><i></i>→</span>
+          <div class="arch-node" id="archExecutor" data-stage="executor"><small>EXECUTOR</small><strong>Selected lane</strong><em>Run</em></div>
+          <span class="arch-link"><i></i>→</span>
+          <div class="arch-node" id="archEvidence" data-stage="evidence"><small>EVIDENCE</small><strong>Trace + proof</strong><em>Verify</em></div>
+        </section>
       </section>
 
-      <div class="recording-status-row">
+      <div class="recording-status-row cockpit-status-row">
         <div class="hero-badges recording-badges">
           <span id="mcpBadge" class="badge">Checking browser mode…</span>
           <span id="copilotBadge" class="badge">Checking local model…</span>
@@ -38,49 +68,55 @@
         <section class="status-strip recording-status" aria-label="System status">
           <article><span>EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Public delivery</small></article>
           <article><span>BRIDGE</span><strong id="adapterState">Checking…</strong><small id="adapterDetail">Public-safe adapter</small></article>
-          <article><span>TOOLS</span><strong id="toolCount">11 WebMCP</strong><small>Agent surface</small></article>
+          <article><span>TOOLS</span><strong id="toolCount">12 WebMCP</strong><small>Agent surface</small></article>
           <article><span>ORIGIN</span><strong>Local / private</strong><small>On-prem fabric</small></article>
         </section>
       </div>
 
-      <section class="recording-grid" aria-label="Mission Control recording cockpit">
-        <div class="operator-column">
-          <section class="panel dmx-panel recording-dmx">
-            <div class="section-heading compact-heading">
-              <div><p class="eyebrow">PHYSICAL WORLD · AG-59</p><h2>DMX quick control</h2></div>
-              <span id="dmxState" class="muted">Checking DMX bridge…</span>
-            </div>
-            <div class="dmx-actions recording-dmx-actions">
-              <button id="dmxStatusBtn" class="secondary" type="button">Refresh scenes</button>
-              <select id="dmxScene" aria-label="Available DMX scenes">
-                <option value="rainbow">Rainbow</option>
-                <option value="frenzy">Frenzy</option>
-                <option value="morado_uv">Morado UV</option>
-                <option value="rojo_sangre">Rojo sangre</option>
-                <option value="chill_lounge">Chill lounge</option>
-              </select>
-              <button id="dmxSceneBtn" type="button">Apply scene</button>
-              <button id="dmxBlackoutBtn" class="secondary" type="button">Blackout</button>
-            </div>
-            <p class="lane-note recording-dmx-note">Scene names come from the trusted AG-59 registry. Newly registered validated scenes appear here after refresh; raw DMX channels are never exposed.</p>
-          </section>
-
-          <section class="panel lanes-panel recording-lanes">
-            <div class="section-heading compact-heading">
-              <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Four lanes · one control surface</h2></div>
+      <section class="control-dock" aria-label="Execution lanes and physical controls">
+        <section class="panel lanes-panel recording-lanes lane-dock-panel">
+          <div class="section-heading compact-heading lane-heading">
+            <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Choose who executes</h2></div>
+            <div class="lane-heading-actions">
+              <button id="autoLaneBtn" class="auto-lane selected" type="button" aria-pressed="true">AUTO · local-first</button>
               <span id="fabricState" class="muted">Loading live fabric…</span>
             </div>
-            <div class="cards recording-cards" id="agents"></div>
-          </section>
+          </div>
+          <div class="cards recording-cards" id="agents"></div>
+        </section>
 
-          <section class="panel copilot-panel unified-chat-panel recording-chat" aria-label="InnerOS coding chat">
-            <header class="panel-header chat-panel-header recording-chat-header">
+        <section class="panel dmx-panel recording-dmx dmx-dock-panel">
+          <div class="section-heading compact-heading">
+            <div><p class="eyebrow">PHYSICAL WORLD · AG-59</p><h2>DMX quick control</h2></div>
+            <span id="dmxState" class="muted">Checking DMX bridge…</span>
+          </div>
+          <div class="dmx-actions recording-dmx-actions">
+            <button id="dmxStatusBtn" class="secondary" type="button">Refresh</button>
+            <select id="dmxScene" aria-label="Available DMX scenes">
+              <option value="rainbow">Rainbow</option>
+              <option value="frenzy">Frenzy</option>
+              <option value="morado_uv">Morado UV</option>
+              <option value="rojo_sangre">Rojo sangre</option>
+              <option value="chill_lounge">Chill lounge</option>
+            </select>
+            <button id="dmxSceneBtn" type="button">Apply scene</button>
+            <button id="dmxBlackoutBtn" class="secondary danger-soft" type="button">Blackout</button>
+          </div>
+          <p class="lane-note recording-dmx-note">Trusted AG-59 registry only. New validated scenes appear automatically; registration never equals physical execution.</p>
+        </section>
+      </section>
+
+      <section class="recording-grid cockpit-grid" aria-label="Mission Control cockpit">
+        <div class="operator-column cockpit-operator">
+          <section class="panel copilot-panel unified-chat-panel recording-chat cockpit-chat" aria-label="InnerOS coding chat">
+            <header class="panel-header chat-panel-header recording-chat-header cockpit-chat-header">
               <div>
-                <p class="eyebrow">LIVE CODING CHAT</p>
-                <h2>InnerOS Copilot</h2>
-                <p>Ask the local model, choose an execution lane, then follow backend evidence on the right.</p>
+                <p class="eyebrow">PRIMARY WORKSPACE</p>
+                <h2>Coding Chat · InnerOS Copilot</h2>
+                <p>Ask the local model, choose the executor above, then watch real backend proof on the right.</p>
               </div>
               <div class="chat-header-actions">
+                <div class="selected-executor-pill" id="selectedExecutorPill"><span>EXECUTOR</span><strong id="selectedExecutorLabel">AUTO · local-first</strong></div>
                 <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
                 <button id="logoutBtn" class="ghost compact-button" type="button" hidden>Log out</button>
               </div>
@@ -92,9 +128,9 @@
               </label>
               <label>Execution target
                 <select id="executorTarget">
-                  <option value="auto">Auto · InnerOS policy</option>
-                  <option value="local">Local AMD · A2A</option>
-                  <option value="codex">Codex</option>
+                  <option value="auto">Auto · InnerOS local-first policy</option>
+                  <option value="local">Local AMD · headless A2A</option>
+                  <option value="codex">Codex · headless</option>
                   <option value="cursor">Cursor · remote inbox</option>
                   <option value="antigravity">AntiGravity · remote inbox</option>
                 </select>
@@ -104,7 +140,7 @@
             <div id="copilotMessages" class="chat unified-chat recording-chat-window" aria-live="polite">
               <article class="bubble assistant">
                 <span class="bubble-label">INNEROS COPILOT</span>
-                <p>Describe what you want to build or change. I will prepare an execution brief; choose who executes it and watch the verified trace beside this chat.</p>
+                <p>Describe what you want to build or change. I will prepare an execution brief; choose who executes it above and watch the verified trace beside this chat.</p>
               </article>
             </div>
 
@@ -141,7 +177,7 @@
           </section>
         </div>
 
-        <aside class="panel trace-panel recording-trace">
+        <aside class="panel trace-panel recording-trace cockpit-trace">
           <header class="trace-header recording-trace-header">
             <div>
               <p class="eyebrow">PROOF, NOT THEATER</p>
