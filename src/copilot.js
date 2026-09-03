@@ -44,6 +44,14 @@ function executionBrief(content) {
   return text(match?.[1] || content, 900);
 }
 
+function boundedHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-16).map((item) => ({
+    role: item?.role === 'assistant' ? 'assistant' : 'user',
+    content: text(item?.content, 5000)
+  })).filter((item) => item.content);
+}
+
 export function isDmxSceneCreationIntent(value = '') {
   const message = String(value || '').toLowerCase();
   return /(crea|crear|cree|nueva|nuevo|create|make|build|design)/.test(message)
@@ -57,6 +65,8 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
   const cfg = resolveCopilotConfig(env);
   const message = text(input.message, 4000);
   const project = text(input.project, 120) || 'inneros-webmcp';
+  const history = boundedHistory(input.history);
+  const projectContext = text(input.context, 50000);
   if (!message) return { ok: false, state: 'rejected', error: 'message_required' };
   if (!cfg.configured) return { ok: false, state: 'unavailable', error: 'local_copilot_not_configured' };
   const dmxSceneIntent = isDmxSceneCreationIntent(message);
@@ -67,25 +77,30 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     'You are InnerOS Copilot inside a WebMCP coding mission control.',
     'Respond ONLY in English even when the user writes in another language.',
     'You are connected to a local coding model, but you do NOT execute code yourself.',
-    'Never claim that files changed, tests passed, or a deployment happened unless execution evidence is supplied by the system.',
+    'Never claim that files changed, tests passed, a project was created, or a deployment happened unless execution evidence is supplied by the system.',
+    'Treat prior conversation and attached project context as read-only planning input. Do not claim attached files were modified merely because you read them.',
+    'The human may refine the proposal over several turns. Use the supplied conversation history to keep requirements consistent and produce the latest coherent plan.',
     'Be concise and useful: explain the approach, mention important risks, and propose concrete implementation steps or code when appropriate.',
     dmxSceneIntent
-      ? 'This request is a governed native AG-59 DMX scene-creation action. Do NOT propose raw DMX addresses, raw channels, RGB channel writes, strobe frequencies, or flashes faster than 650ms per full-stage step. At the time of this reply NO scene has been created or registered yet. Never claim created, registered, complete, applied, or executed. Explain that AUTO will attempt safe design and registration immediately after this reply, while physical light execution remains a separate Apply Scene action.'
+      ? 'This request is a governed native AG-59 DMX scene-creation action. Do NOT propose raw DMX addresses, raw channels, RGB channel writes, strobe frequencies, or flashes faster than 650ms per full-stage step. At the time of this reply NO scene has been created or registered yet. Never claim created, registered, complete, applied, or executed. Explain that after explicit Approve & Execute, AUTO can request safe design and registration; physical light execution remains a separate Apply Scene action.'
       : '',
-    'End every answer with a single line beginning exactly with "EXECUTION BRIEF:" containing a compact instruction that another coding agent can execute.',
+    'End every answer with a single line beginning exactly with "EXECUTION BRIEF:" containing a compact instruction that an executor can carry out only after explicit approval.',
     `Current project: ${project}.`
   ].join(' ');
 
   try {
+    const messages = [
+      { role: 'system', content: system },
+      ...history,
+      ...(projectContext ? [{ role: 'system', content: `ATTACHED PROJECT CONTEXT (read-only; may be truncated):\n${projectContext}` }] : []),
+      { role: 'user', content: message }
+    ];
     const response = await fetchImpl(cfg.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model: cfg.model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: message }
-        ],
+        messages,
         temperature: 0.2,
         max_tokens: 1000,
         stream: false
@@ -97,10 +112,10 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
     const content = text(data?.choices?.[0]?.message?.content, 8000);
     if (!content) return { ok: false, state: 'unavailable', error: 'local_copilot_empty_response' };
     const responseMessage = dmxSceneIntent
-      ? 'Native AG-59 DMX scene creation detected. No scene has been registered yet. In AUTO, InnerOS will now ask the local Qwen scene designer for a bounded definition, normalize and validate it, then request AG-59 registration. The physical lights will remain idle until you press Apply scene.'
+      ? 'Native AG-59 DMX scene creation detected. Nothing has been registered or executed. We can keep refining the scene in this conversation. When you are satisfied, Approve & Execute will ask the local Qwen scene designer for a bounded definition and request AG-59 registration; the physical lights will still remain idle until Apply scene.'
       : content;
     const brief = dmxSceneIntent
-      ? text(`Design and register a safe bounded AG-59 DMX scene from this user request: ${message}`, 900)
+      ? text(`After explicit approval, design and register a safe bounded AG-59 DMX scene from this user request: ${message}`, 900)
       : executionBrief(content);
     return {
       ok: true,
@@ -112,7 +127,9 @@ export async function askInnerOSCopilot(input = {}, options = {}) {
       message: responseMessage,
       executionBrief: brief,
       nativeAction: dmxSceneIntent ? 'dmx_create_scene' : '',
-      autoRunnable: dmxSceneIntent,
+      autoRunnable: false,
+      historyTurnsUsed: history.length,
+      contextCharsUsed: projectContext.length,
       executionClaimed: false,
       backend: 'local_vllm'
     };

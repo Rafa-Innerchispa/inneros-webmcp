@@ -1063,3 +1063,440 @@ if ($('executePlan')) $('executePlan').textContent = 'Approve & Execute Plan';
 if ($('project')) {
   $('project').title = 'Existing InnerOS project ID / verified repo binding. Typing a new name does not create a project.';
 }
+
+
+// Development workspace: explicit project creation, persistent project context,
+// real multi-turn Copilot context, and voice dictation. Conversation still never executes.
+const devContext = { project: '', attachments: [] };
+
+function contextText(limit = 45000) {
+  let out = '';
+  for (const item of devContext.attachments.slice(-8)) {
+    const chunk = String(item.context || '');
+    if (!chunk) continue;
+    const header = `\n\n--- ATTACHMENT: ${item.name} (${item.extraction || 'text'}) ---\n`;
+    if ((out + header).length >= limit) break;
+    out += header + chunk.slice(0, Math.max(0, limit - out.length - header.length));
+    if (out.length >= limit) break;
+  }
+  return out.slice(0, limit);
+}
+
+function conversationHistoryForModel() {
+  return persistedChatHistory
+    .filter((item) => item.role === 'user' || (item.role === 'assistant' && /LOCAL AMD|INNEROS COPILOT|QWEN/i.test(item.label || '')))
+    .slice(-14)
+    .map((item) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.message || '').slice(0, 5000) }));
+}
+
+function renderAttachmentChips() {
+  const host = $('attachmentChips');
+  if (!host) return;
+  host.replaceChildren(...devContext.attachments.map((item) => {
+    const chip = document.createElement('span');
+    chip.className = `context-chip ${item.context ? 'ready' : 'warning'}`;
+    chip.title = `${item.name} · ${item.bytes || 0} bytes · ${item.extraction || 'unknown'} · ${item.chars || 0} text chars`;
+    chip.textContent = item.context ? `${item.name} · ${item.chars || 0} chars` : `${item.name} · stored / no text`;
+    return chip;
+  }));
+  const state = $('attachmentState');
+  if (state) state.textContent = devContext.attachments.length
+    ? `${devContext.attachments.length} project file${devContext.attachments.length === 1 ? '' : 's'} in Copilot context`
+    : 'Attach PDF or code as read-only planning context.';
+}
+
+async function loadProjectAttachments(projectValue = '') {
+  const project = String(projectValue || $('project')?.value || '').trim().toLowerCase();
+  if (!project || !/^[a-z0-9][a-z0-9_-]{1,47}$/.test(project)) {
+    devContext.project = '';
+    devContext.attachments = [];
+    renderAttachmentChips();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/context/list?project=${encodeURIComponent(project)}`);
+    const data = await response.json();
+    if (data.ok) {
+      devContext.project = project;
+      devContext.attachments = Array.isArray(data.attachments) ? data.attachments : [];
+    } else {
+      devContext.project = project;
+      devContext.attachments = [];
+    }
+  } catch {
+    devContext.project = project;
+    devContext.attachments = [];
+  }
+  renderAttachmentChips();
+}
+
+async function createProjectFromUi() {
+  const project = String($('project')?.value || '').trim().toLowerCase();
+  const status = $('projectActionState');
+  if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(project)) {
+    if (status) status.textContent = 'Use 2–48 lowercase letters/numbers, - or _.';
+    return;
+  }
+  const button = $('createProjectBtn');
+  if (button) { button.disabled = true; button.textContent = 'Creating…'; }
+  if (status) status.textContent = 'Creating local Git workspace under Projects…';
+  try {
+    const data = await invoke('create_project_workspace', {
+      project,
+      description: 'Created from InnerOS WebMCP development workspace.'
+    });
+    if (data.ok) {
+      if (status) status.textContent = `READY · ${project} · local Git · Projects workspace`;
+      bubble('assistant', 'PROJECT RUNTIME', `Created ${project} as a local Git development workspace and registered it in InnerOS. No GitHub/cloud repository was created.`);
+      setNativeActionHint(`PROJECT READY · ${project} · conversation can begin; execution still requires approval`, 'ready');
+      await loadProjectAttachments(project);
+    } else if (data.error === 'project_already_exists') {
+      if (status) status.textContent = `EXISTS · ${project}`;
+      await loadProjectAttachments(project);
+    } else {
+      if (status) status.textContent = `BLOCKED · ${data.error || data.state || 'creation failed'}`;
+      bubble('error', 'PROJECT RUNTIME', `Project creation blocked: ${data.error || data.state || 'unknown error'}.`);
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Create Project'; }
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',').pop() || '');
+    reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadContextFile(file) {
+  const project = String($('project')?.value || '').trim().toLowerCase();
+  if (!project) return;
+  const state = $('attachmentState');
+  if (file.size > 5 * 1024 * 1024) {
+    if (state) state.textContent = 'Attachment blocked · 5 MB maximum.';
+    return;
+  }
+  if (state) state.textContent = `Reading ${file.name}…`;
+  try {
+    const dataBase64 = await fileToBase64(file);
+    const response = await fetch('/api/context/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ project, name: file.name, mime: file.type || 'application/octet-stream', dataBase64 })
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      if (state) state.textContent = `Attachment blocked · ${data.error || data.state}`;
+      bubble('error', 'PROJECT CONTEXT', `Could not attach ${file.name}: ${data.error || data.state || 'upload failed'}.`);
+      return;
+    }
+    devContext.project = project;
+    devContext.attachments = [...devContext.attachments.filter((item) => item.id !== data.attachment.id), data.attachment].slice(-12);
+    renderAttachmentChips();
+    bubble('assistant', 'PROJECT CONTEXT', data.attachment.context
+      ? `Attached ${data.attachment.name}. ${data.attachment.chars} text characters are now available to the local Copilot as read-only project context.`
+      : `Stored ${data.attachment.name}, but no text could be extracted. Text PDFs and source files work immediately; scanned PDFs still need OCR.`);
+    addTrace({
+      title: `Project context attached · ${data.attachment.name}`,
+      detail: `${data.attachment.extraction} · ${data.attachment.chars} chars · read-only planning context`,
+      state: data.attachment.context ? 'ready' : 'info', source: 'BACKEND', confirmed: true
+    });
+  } catch (error) {
+    if (state) state.textContent = `Attachment failed · ${error.message}`;
+  }
+}
+
+async function conversationalAskCopilot() {
+  const prompt = $('copilotPrompt')?.value?.trim() || '';
+  if (!prompt) return;
+  const project = $('project')?.value?.trim() || 'inneros-webmcp';
+  const history = conversationHistoryForModel();
+  const context = contextText();
+  lastCopilotPrompt = prompt;
+  lastExecutionBrief = '';
+  $('executePlan').disabled = true;
+  bubble('user', 'YOU', prompt);
+  $('copilotPrompt').value = '';
+  $('askCopilot').disabled = true;
+  $('askCopilot').textContent = 'Local model thinking…';
+  setFlowStage('archHuman', { confirmed: true });
+  window.setTimeout(() => setFlowStage('archWebmcp'), 120);
+  try {
+    const data = await invoke('ask_inneros_copilot', { project, message: prompt, history, context });
+    if (data.ok) {
+      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'} · ${data.backend || 'local_vllm'}`, data.message);
+      const casual = isCasualPrompt(prompt);
+      lastExecutionBrief = casual ? '' : (data.executionBrief || prompt);
+      $('executePlan').disabled = casual;
+      $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
+      $('copilotBadge').textContent = `Local Qwen3-Coder · ${data.historyTurnsUsed || 0} prior turns · ${data.contextCharsUsed || 0} context chars`;
+      $('copilotBadge').classList.add('ok');
+      if (!casual) setNativeActionHint('PLAN READY · keep refining in chat, then Approve & Execute when satisfied. Nothing has executed.', 'info');
+    } else {
+      bubble('error', 'COPILOT ERROR', data.error || 'Local model unavailable.');
+    }
+  } catch (error) {
+    bubble('error', 'COPILOT ERROR', error.message || 'Request failed.');
+  } finally {
+    $('askCopilot').disabled = false;
+    $('askCopilot').textContent = 'Ask local model';
+  }
+}
+
+async function verifyDevelopmentProject() {
+  const project = $('project')?.value?.trim() || 'inneros-webmcp';
+  const status = await invoke('get_project_status', { project });
+  const valid = Boolean(status?.ok && status?.exists && status?.isGit);
+  if (valid) return { ok: true, project, status };
+  bubble('error', 'PROJECT REQUIRED', `Project "${project}" is not a verified Git workspace. Create it with Create Project or select an existing registered project.`);
+  setNativeActionHint('EXECUTION BLOCKED · verified Git project required. No task was dispatched.', 'error');
+  return { ok: false, project, status };
+}
+
+async function approvedExecuteWithContext() {
+  const button = $('executePlan');
+  const binding = await verifyDevelopmentProject();
+  if (!binding.ok) return;
+  const project = binding.project;
+  const target = $('executorTarget')?.value || 'auto';
+  const plan = (lastExecutionBrief || lastCopilotPrompt || '').slice(0, 3000);
+  if (!plan) return;
+  const attached = contextText(6500);
+  const instruction = attached
+    ? `${plan}\n\nREAD-ONLY ATTACHED PROJECT CONTEXT:\n${attached}`.slice(0, 10000)
+    : plan;
+
+  button.disabled = true;
+  button.textContent = 'Approved · dispatching…';
+  setNativeActionHint(`APPROVED · executing the latest refined plan via ${executorLabel(target)}.`, 'active');
+  try {
+    if (target === 'auto' && isDmxSceneCreationPrompt(lastCopilotPrompt)) {
+      button.textContent = 'Approved · registering scene…';
+      const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
+      resultEl.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        await refreshDmxSceneSelector(data.supportedScenes || []);
+        const select = $('dmxScene');
+        if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
+        $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
+        bubble('assistant', 'APPROVED · LOCAL QWEN + AG-59', `Registered ${data.label || data.scene} after approval. The lights have NOT run; Apply scene remains a separate physical action.`);
+        setNativeActionHint(`REGISTERED · ${data.label || data.scene} · press Apply scene for physical execution`, 'ready');
+        lastExecutionBrief = '';
+        button.textContent = 'Plan executed · scene registered';
+        return;
+      }
+      bubble('error', 'AG-59 SCENE REGISTRY', `Approved scene creation was blocked: ${data.error || data.state || 'validation failed'}.`);
+      return;
+    }
+
+    const data = target === 'auto'
+      ? await invoke('resolve_project_blocker', { project, policy: 'local_first', instruction })
+      : await invoke('dispatch_agent_action', { agent: target, project, instruction });
+    renderMission(data, target);
+    if (data?.dispatchId) {
+      bubble('assistant', 'INNEROS ROUTER', `Approved plan dispatched to ${data?.route?.provider || data?.agent || target}. Dispatch ID: ${data.dispatchId}. Delivery is not completion; evidence will update separately.`);
+      setNativeActionHint(`DISPATCHED · ${executorLabel(target)} · waiting for execution evidence`, 'ready');
+    } else if (!data?.ok) {
+      bubble('error', 'INNEROS ROUTER', data?.error || data?.blocker || 'The selected lane could not accept the approved plan.');
+    }
+  } finally {
+    if (!button.textContent.startsWith('Plan executed')) {
+      button.disabled = false;
+      button.textContent = 'Approve & Execute Plan';
+    }
+  }
+}
+
+function installDevelopmentWorkspaceUi() {
+  const projectInput = $('project');
+  if (projectInput && !$('createProjectBtn')) {
+    const actions = document.createElement('div');
+    actions.className = 'project-actions';
+    actions.innerHTML = '<button id="checkProjectBtn" type="button" class="ghost compact-button">Check</button><button id="createProjectBtn" type="button" class="secondary compact-button">Create Project</button><span id="projectActionState">Existing project or create a local Git workspace.</span>';
+    projectInput.insertAdjacentElement('afterend', actions);
+    $('createProjectBtn').addEventListener('click', createProjectFromUi);
+    $('checkProjectBtn').addEventListener('click', async () => {
+      const project = projectInput.value.trim();
+      const data = await invoke('get_project_status', { project });
+      $('projectActionState').textContent = data?.exists ? `READY · ${data.project} · ${data.workspace || 'registered'}${data.repo ? ` · ${data.repo}` : ' · local Git'}` : `NOT FOUND · ${project}`;
+      if (data?.exists) await loadProjectAttachments(project);
+    });
+    projectInput.addEventListener('change', () => loadProjectAttachments(projectInput.value));
+  }
+
+  const composer = document.querySelector('.recording-composer');
+  if (composer && !$('contextToolbar')) {
+    const toolbar = document.createElement('div');
+    toolbar.id = 'contextToolbar';
+    toolbar.className = 'context-toolbar';
+    toolbar.innerHTML = '<div class="context-actions"><button id="attachFileBtn" type="button" class="ghost compact-button">＋ Attach PDF / code</button><button id="voiceBtn" type="button" class="ghost compact-button">🎙 Voice</button><input id="contextFileInput" type="file" hidden multiple accept=".pdf,.txt,.md,.json,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.html,.css,.sql,.yaml,.yml,.toml,.sh,.java,.kt,.go,.rs,.c,.cpp,.h,.hpp,.cs,.php,.rb,.swift,.xml,.csv,text/*,application/pdf,application/json"></div><span id="attachmentState">Attach PDF or code as read-only planning context.</span><div id="attachmentChips" class="context-chips"></div>';
+    composer.insertBefore(toolbar, composer.firstChild);
+    $('attachFileBtn').addEventListener('click', () => $('contextFileInput').click());
+    $('contextFileInput').addEventListener('change', async (event) => {
+      for (const file of [...event.target.files].slice(0, 6)) await uploadContextFile(file);
+      event.target.value = '';
+    });
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (Recognition) {
+      const recognition = new Recognition();
+      recognition.lang = 'es-EC';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      let base = '';
+      recognition.onstart = () => { base = $('copilotPrompt').value.trim(); $('voiceBtn').textContent = '● Listening…'; };
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) transcript += event.results[i][0].transcript;
+        $('copilotPrompt').value = `${base}${base ? ' ' : ''}${transcript}`.trim();
+      };
+      recognition.onend = () => { $('voiceBtn').textContent = '🎙 Voice'; };
+      recognition.onerror = () => { $('voiceBtn').textContent = '🎙 Voice'; };
+      $('voiceBtn').title = 'Browser speech recognition fallback. Dictation only; it never executes a plan.';
+      $('voiceBtn').addEventListener('click', () => recognition.start());
+    } else {
+      $('voiceBtn').disabled = true;
+      $('voiceBtn').textContent = 'Voice unavailable';
+    }
+  }
+  loadProjectAttachments($('project')?.value || 'inneros-webmcp');
+}
+
+// Capture before legacy listeners so there is one authoritative conversation/approval path.
+document.addEventListener('submit', (event) => {
+  if (event.target !== $('copilotForm')) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  conversationalAskCopilot();
+}, true);
+
+document.addEventListener('click', (event) => {
+  if (!event.target?.closest?.('#executePlan')) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  approvedExecuteWithContext();
+}, true);
+
+verifyBoundProjectForApproval = verifyDevelopmentProject;
+window.setTimeout(installDevelopmentWorkspaceUi, 0);
+
+
+// Upgrade voice dictation to local Whisper first. Replacing the button removes the
+// earlier browser-recognition listener; browser speech recognition is only an explicit fallback.
+function installLocalWhisperVoice(attempt = 0) {
+  const oldButton = $('voiceBtn');
+  if (!oldButton) {
+    if (attempt < 12) window.setTimeout(() => installLocalWhisperVoice(attempt + 1), 50);
+    return;
+  }
+  const button = oldButton.cloneNode(true);
+  oldButton.replaceWith(button);
+  button.disabled = false;
+  button.textContent = '🎙 Local voice';
+  button.title = 'Record locally in the browser, transcribe through the on-prem Whisper service, and place the text in chat. Dictation never executes.';
+
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function enableBrowserFallback() {
+    if (!Recognition) {
+      button.disabled = true;
+      button.textContent = 'Voice unavailable';
+      return;
+    }
+    button.textContent = '🎙 Browser fallback';
+    button.title = 'Local Whisper was unavailable. This explicit fallback uses browser speech recognition; it still only dictates text.';
+    button.onclick = () => {
+      const recognition = new Recognition();
+      recognition.lang = 'es-EC';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      const base = $('copilotPrompt').value.trim();
+      button.textContent = '● Browser listening…';
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) transcript += event.results[i][0].transcript;
+        $('copilotPrompt').value = `${base}${base ? ' ' : ''}${transcript}`.trim();
+      };
+      recognition.onend = () => { button.textContent = '🎙 Browser fallback'; };
+      recognition.onerror = () => { button.textContent = '🎙 Browser fallback'; };
+      recognition.start();
+    };
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    enableBrowserFallback();
+    return;
+  }
+
+  let recorder = null;
+  let stream = null;
+  let chunks = [];
+  let recording = false;
+
+  async function finishRecording() {
+    if (!recorder || recorder.state === 'inactive') return;
+    recorder.stop();
+  }
+
+  button.onclick = async () => {
+    if (recording) {
+      recording = false;
+      button.disabled = true;
+      button.textContent = 'Transcribing locally…';
+      await finishRecording();
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferred = window.MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      recorder = new MediaRecorder(stream, { mimeType: preferred });
+      chunks = [];
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+      recorder.onstop = async () => {
+        stream?.getTracks?.().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || preferred });
+        try {
+          const dataBase64 = await fileToBase64(blob);
+          const response = await fetch('/api/voice/transcribe', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ mime: blob.type || preferred, dataBase64 })
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || 'local_whisper_failed');
+          const existing = $('copilotPrompt').value.trim();
+          $('copilotPrompt').value = `${existing}${existing ? ' ' : ''}${data.transcript}`.trim();
+          button.disabled = false;
+          button.textContent = '🎙 Local voice';
+          if ($('attachmentState')) $('attachmentState').textContent = `Voice transcribed locally · ${data.transcript.length} chars · review before sending`;
+          addTrace({
+            title: 'Voice transcribed · Local Whisper',
+            detail: `${data.transcript.length} characters inserted into the chat composer. No plan was sent or executed.`,
+            state: 'ready', source: 'BACKEND', confirmed: true, backend: 'local_whisper'
+          });
+        } catch (error) {
+          button.disabled = false;
+          if ($('attachmentState')) $('attachmentState').textContent = `Local Whisper unavailable · ${error.message}. Browser fallback is now available explicitly.`;
+          addTrace({
+            title: 'Local Whisper unavailable', detail: error.message || 'transcription failed',
+            state: 'blocked', source: 'BACKEND', confirmed: true, backend: 'local_whisper'
+          });
+          enableBrowserFallback();
+        }
+      };
+      recorder.start();
+      recording = true;
+      button.textContent = '■ Stop & transcribe';
+      if ($('attachmentState')) $('attachmentState').textContent = 'Recording for Local Whisper · click Stop & transcribe when finished';
+    } catch (error) {
+      recording = false;
+      stream?.getTracks?.().forEach((track) => track.stop());
+      if ($('attachmentState')) $('attachmentState').textContent = `Microphone unavailable · ${error.message}`;
+      enableBrowserFallback();
+    }
+  };
+}
+
+window.setTimeout(() => installLocalWhisperVoice(), 80);

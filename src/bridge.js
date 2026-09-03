@@ -9,12 +9,20 @@ const AGENTS = Object.freeze([
   { id: 'local', label: 'Local AMD', transport: 'local vLLM / A2A', capability: 'Qwen3-Coder 30B', verification: '$0 external inference' }
 ]);
 const ALLOWED_AGENTS = Object.freeze(AGENTS.map((agent) => agent.id));
-const ALLOWED_ACTIONS = Object.freeze(['inspect','dispatch','status','evidence','resolve']);
+const ALLOWED_ACTIONS = Object.freeze(['inspect','dispatch','status','evidence','resolve','create_project']);
 const dispatches = new Map();
 
 function safeText(value, max = 2000) {
   if (typeof value !== 'string') return '';
   return value.trim().slice(0, max);
+}
+
+function safeHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-16).map((item) => ({
+    role: item?.role === 'assistant' ? 'assistant' : 'user',
+    content: safeText(item?.content, 5000)
+  })).filter((item) => item.content);
 }
 
 const DMX_COLOR_ALIASES = Object.freeze({
@@ -59,12 +67,12 @@ export function getPolicy() {
   return {
     agents: AGENTS,
     actions: ALLOWED_ACTIONS,
-    executionPolicy: 'local_first',
+    executionPolicy: 'approval_then_local_first',
     adapterConfigured: adapterConfigured(),
     copilot: copilotStatus(),
     dmx: dmxStatus(),
     writesRequireBridge: true,
-    truthRule: 'configured capability is never presented as running execution'
+    truthRule: 'conversation never equals execution; running/completed require backend evidence'
   };
 }
 
@@ -72,8 +80,10 @@ export async function invokeTool(name, input = {}) {
   if (name === 'ask_inneros_copilot') {
     const project = safeText(input.project, 120) || 'inneros-webmcp';
     const message = safeText(input.message, 4000);
+    const history = safeHistory(input.history);
+    const context = safeText(input.context, 50000);
     if (!message) return { ok: false, state: 'rejected', error: 'message_required' };
-    return askInnerOSCopilot({ project, message });
+    return askInnerOSCopilot({ project, message, history, context });
   }
 
   if (name === 'list_agents') {
@@ -85,6 +95,15 @@ export async function invokeTool(name, input = {}) {
     const project = safeText(input.project, 120);
     if (!project) return { ok: false, state: 'rejected', error: 'project_required' };
     return liveOrUnavailable(name, { project }, `No judge-safe live project adapter is connected for ${project}.`);
+  }
+
+  if (name === 'create_project_workspace') {
+    const project = safeText(input.project, 48).toLowerCase();
+    const description = safeText(input.description, 500);
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(project)) {
+      return { ok: false, state: 'rejected', error: 'project_name_invalid' };
+    }
+    return liveOrUnavailable(name, { project, description }, 'Project bootstrap requires the live InnerOS project runtime bridge.');
   }
 
   if (name === 'inspect_blockers') {
@@ -99,7 +118,7 @@ export async function invokeTool(name, input = {}) {
     if (!project) return { ok: false, state: 'rejected', error: 'project_required' };
     const policy = safeText(input.policy, 40) || 'local_first';
     if (!['local_first','best_available'].includes(policy)) return { ok: false, state: 'rejected', error: 'policy_not_allowlisted' };
-    const instruction = safeText(input.instruction, 2000) || 'Diagnose the current blocker and resolve it safely.';
+    const instruction = safeText(input.instruction, 10000) || 'Diagnose the current blocker and resolve it safely.';
     if (adapterConfigured()) return callInnerOS(name, { project, policy, instruction });
     const dispatchId = `wmcp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const record = {
@@ -118,7 +137,7 @@ export async function invokeTool(name, input = {}) {
 
   if (name === 'dispatch_agent_action') {
     const agent = safeText(input.agent, 40).toLowerCase();
-    const instruction = safeText(input.instruction, 2000);
+    const instruction = safeText(input.instruction, 10000);
     const project = safeText(input.project, 120) || null;
     const taskId = safeText(input.taskId, 160) || null;
     if (!ALLOWED_AGENTS.includes(agent)) return { ok: false, state: 'rejected', error: 'agent_not_allowlisted' };

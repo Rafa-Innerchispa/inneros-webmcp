@@ -2,6 +2,7 @@ export const TOOL_NAMES = [
   'ask_inneros_copilot',
   'list_agents',
   'get_project_status',
+  'create_project_workspace',
   'inspect_blockers',
   'dispatch_agent_action',
   'resolve_project_blocker',
@@ -13,10 +14,30 @@ export const TOOL_NAMES = [
   'dmx_blackout'
 ];
 
+const historyItem = {
+  type: 'object',
+  properties: {
+    role: { type: 'string', enum: ['user', 'assistant'] },
+    content: { type: 'string', maxLength: 5000 }
+  },
+  required: ['role', 'content'],
+  additionalProperties: false
+};
+
 const definitions = {
   ask_inneros_copilot: {
-    description: 'Ask the local InnerOS coding copilot for an English-only coding answer and execution brief. This tool never claims code execution.',
-    inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, message: { type: 'string', maxLength: 4000 } }, required: ['message'], additionalProperties: false }
+    description: 'Ask the local InnerOS coding copilot using bounded conversation history and optional project-file context. This tool never claims code execution.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', maxLength: 120 },
+        message: { type: 'string', maxLength: 4000 },
+        history: { type: 'array', maxItems: 16, items: historyItem },
+        context: { type: 'string', maxLength: 50000 }
+      },
+      required: ['message'],
+      additionalProperties: false
+    }
   },
   list_agents: {
     description: 'List agent runtimes and verified capabilities exposed by the public-safe InnerOS bridge.',
@@ -26,17 +47,29 @@ const definitions = {
     description: 'Read the current status of an allowlisted project.',
     inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 } }, required: ['project'], additionalProperties: false }
   },
+  create_project_workspace: {
+    description: 'Create a bounded local Git development project under the canonical Projects workspace and register it in InnerOS Project Runtime. This does not create a cloud or GitHub repository.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', pattern: '^[a-z0-9][a-z0-9_-]{1,47}$' },
+        description: { type: 'string', maxLength: 500 }
+      },
+      required: ['project'],
+      additionalProperties: false
+    }
+  },
   inspect_blockers: {
     description: 'Inspect truthful blockers for an allowlisted project or task.',
     inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, taskId: { type: 'string', maxLength: 160 } }, additionalProperties: false }
   },
   dispatch_agent_action: {
-    description: 'Dispatch an allowlisted coding action to Codex, Cursor, AntiGravity, or the local InnerOS runtime and return a real dispatch reference.',
-    inputSchema: { type: 'object', properties: { agent: { type: 'string', enum: ['codex','cursor','antigravity','local'] }, project: { type: 'string', maxLength: 120 }, taskId: { type: 'string', maxLength: 160 }, instruction: { type: 'string', maxLength: 2000 } }, required: ['agent','instruction'], additionalProperties: false }
+    description: 'Dispatch an approved coding action to Codex, Cursor, AntiGravity, or the local InnerOS runtime and return a real dispatch reference.',
+    inputSchema: { type: 'object', properties: { agent: { type: 'string', enum: ['codex','cursor','antigravity','local'] }, project: { type: 'string', maxLength: 120 }, taskId: { type: 'string', maxLength: 160 }, instruction: { type: 'string', maxLength: 10000 } }, required: ['agent','instruction'], additionalProperties: false }
   },
   resolve_project_blocker: {
-    description: 'Diagnose a project blocker, select the cheapest capable allowlisted resource under local-first policy, dispatch the repair, and return trace/evidence references.',
-    inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, policy: { type: 'string', enum: ['local_first','best_available'], default: 'local_first' }, instruction: { type: 'string', maxLength: 2000 } }, required: ['project'], additionalProperties: false }
+    description: 'After approval, diagnose/route a coding task through the cheapest capable allowlisted local-first resource and return trace/evidence references.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string', maxLength: 120 }, policy: { type: 'string', enum: ['local_first','best_available'], default: 'local_first' }, instruction: { type: 'string', maxLength: 10000 } }, required: ['project'], additionalProperties: false }
   },
   get_execution_trace: {
     description: 'Read sanitized backend-confirmed execution events for a dispatched action.',
@@ -47,7 +80,7 @@ const definitions = {
     inputSchema: { type: 'object', properties: { taskId: { type: 'string', maxLength: 160 }, dispatchId: { type: 'string', maxLength: 200 } }, additionalProperties: false }
   },
   dmx_create_scene: {
-    description: 'Use the private local Qwen model to design one bounded declarative lighting scene from natural language, validate it again in AG-59, and register it in the live scene catalog without physically running it.',
+    description: 'After explicit approval, use the private local Qwen model to design one bounded declarative lighting scene, validate it again in AG-59, and register it without physically running it.',
     inputSchema: { type: 'object', properties: { description: { type: 'string', maxLength: 1800 } }, required: ['description'], additionalProperties: false }
   },
   dmx_status: {
