@@ -144,3 +144,91 @@ button:disabled{opacity:.42;cursor:not-allowed}
   .unified-chat-panel .action-row button{flex:1}
   .unified-chat{min-height:260px;max-height:58vh}
 }
+
+
+/* Recording cockpit: keep chat, DMX controls, lanes and live proof in one viewport. */
+.recording-page{width:min(1820px,calc(100% - 24px));padding:12px 0 22px}
+.recording-hero{padding:16px 18px 18px;border-radius:22px}
+.recording-hero:before{width:440px;height:440px;top:-360px}
+.recording-hero-copy{max-width:none;margin:0;text-align:left}
+.recording-hero h1{max-width:none;margin:4px 0 5px;font-size:clamp(1.9rem,3.2vw,3.15rem);line-height:1;letter-spacing:-.045em}
+.recording-hero-copy .hero-sub{max-width:1320px;margin:0;font-size:.82rem;line-height:1.42}
+.recording-flow{max-width:none;margin:11px 0 0;padding:8px;gap:6px;border-radius:15px}
+.recording-flow .arch-node{padding:8px 6px;border-radius:10px}
+.recording-flow .arch-node strong{font-size:.7rem}
+.recording-flow .arch-node em{font-size:.5rem}
+.recording-status-row{display:flex;align-items:stretch;gap:10px;margin-top:9px}
+.recording-badges{min-width:290px;justify-content:flex-start;align-content:center;margin:0}
+.recording-status{flex:1;margin:0;gap:7px}
+.recording-status article{padding:8px 10px;border-radius:11px}
+.recording-status strong{margin-top:3px;font-size:.72rem}
+.recording-status small{font-size:.56rem}
+.recording-grid{display:grid;grid-template-columns:minmax(520px,.88fr) minmax(600px,1.12fr);gap:12px;margin-top:10px;height:calc(100vh - 275px);min-height:650px;max-height:820px;align-items:stretch}
+.operator-column{display:flex;flex-direction:column;gap:9px;min-height:0;overflow:hidden}
+.compact-heading{align-items:center;gap:10px}
+.compact-heading h2{font-size:1rem}
+.recording-dmx{flex:0 0 auto;padding:11px 13px;border-radius:16px}
+.recording-dmx-actions{display:grid;grid-template-columns:auto minmax(150px,1fr) auto auto;gap:7px;margin-top:7px;align-items:center}
+.recording-dmx-actions select{max-width:none;min-width:0;padding:8px 9px}
+.recording-dmx-actions button{padding:8px 10px;white-space:nowrap}
+.recording-dmx-note{margin-top:6px;font-size:.61rem;line-height:1.35}
+.recording-lanes{flex:0 0 auto;padding:11px 13px;border-radius:16px}
+.recording-cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:7px}
+.recording-cards article{min-height:68px;padding:8px;border-radius:11px;gap:6px}
+.recording-cards strong{font-size:.68rem}
+.recording-cards small{margin-top:3px;font-size:.53rem;line-height:1.25;max-height:2.6em;overflow:hidden}
+.recording-cards .lane-state{font-size:.42rem;padding:2px 4px}
+.recording-chat{flex:1 1 auto;min-height:0;max-width:none;margin:0;padding:11px 13px;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.recording-chat-header{flex:0 0 auto;padding-bottom:7px;align-items:center}
+.recording-chat-header h2{font-size:1.05rem}
+.recording-chat-header p:not(.eyebrow){display:none}
+.recording-chat-header .model-pill{padding:6px 8px;font-size:.58rem}
+.recording-context-row{flex:0 0 auto;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}
+.recording-context-row input,.recording-context-row select{padding:7px 8px;border-radius:9px;font-size:.7rem}
+.recording-context-row label{font-size:.6rem}
+.recording-chat-window{flex:1 1 auto;min-height:135px;max-height:none;margin-top:7px;padding:9px;border-radius:12px;overflow:auto;scrollbar-gutter:stable}
+.recording-chat-window .bubble{padding:8px 10px;border-radius:11px;max-width:92%}
+.recording-chat-window .bubble p{font-size:.75rem;line-height:1.4}
+.recording-composer{flex:0 0 auto;margin-top:7px;padding:8px;border-radius:12px}
+.recording-composer textarea{min-height:55px;max-height:92px;padding:8px 9px;font-size:.76rem;resize:none}
+.recording-composer .composer-footer{margin-top:6px;gap:7px}
+.recording-composer .history-controls{font-size:.55rem}
+.recording-composer .action-row{gap:6px}
+.recording-composer .action-row button{padding:8px 10px;font-size:.68rem}
+.recording-mission{flex:0 0 auto;max-height:190px;overflow:auto;padding:10px 12px;border-radius:15px}
+.recording-mission .mission-summary{margin-top:8px;gap:6px}
+.recording-mission .mission-summary div{padding:7px}
+.recording-mission .wide{margin-top:6px;padding:7px}
+.recording-mission .payload{margin-top:7px;padding-top:6px}
+.recording-trace{position:relative;top:auto;height:100%;min-height:0;padding:13px 14px;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.recording-trace-header{flex:0 0 auto;align-items:flex-start}
+.recording-trace-header h2{font-size:1.25rem}
+.recording-trace-header p:not(.eyebrow){max-width:760px;font-size:.68rem;line-height:1.35;margin-top:4px}
+.recording-proof-strip{flex:0 0 auto;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:9px 0}
+.recording-proof-strip div{padding:8px;border-radius:9px}
+.recording-proof-strip strong{font-size:.66rem}
+.recording-trace-stream{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;padding-right:4px}
+.recording-trace-stream .event{grid-template-columns:66px 1fr;gap:8px;padding:9px 0 10px 12px}
+.recording-trace-stream .event strong{font-size:.72rem}
+.recording-trace-stream .event p{font-size:.65rem;line-height:1.34}
+.recording-trace-stream .event-meta{margin-top:5px}
+.recording-trace-stream .event-meta span{font-size:.5rem}
+.recording-trace footer{flex:0 0 auto;padding-top:8px;font-size:.55rem}
+@media(max-width:1250px){
+  .recording-status-row{display:block}
+  .recording-badges{margin-bottom:7px}
+  .recording-grid{grid-template-columns:1fr;height:auto;max-height:none;min-height:0}
+  .operator-column{overflow:visible}
+  .recording-chat{min-height:520px}
+  .recording-trace{height:680px}
+}
+@media(max-width:760px){
+  .recording-page{width:calc(100% - 14px);padding-top:7px}
+  .recording-hero{padding:12px;border-radius:16px}
+  .recording-hero-copy{text-align:left}
+  .recording-status{grid-template-columns:repeat(2,1fr)}
+  .recording-dmx-actions{grid-template-columns:1fr 1fr}
+  .recording-cards{grid-template-columns:repeat(2,1fr)}
+  .recording-context-row{grid-template-columns:1fr}
+  .recording-proof-strip{grid-template-columns:repeat(2,1fr)}
+}

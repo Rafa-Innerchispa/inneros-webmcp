@@ -1,6 +1,6 @@
 const DEFAULT_TIMEOUT_MS = Number(process.env.INNEROS_DMX_TIMEOUT_MS || 8000);
 
-export const ALLOWLISTED_DMX_SCENES = Object.freeze([
+export const DEFAULT_DMX_SCENES = Object.freeze([
   'rainbow',
   'frenzy',
   'police',
@@ -10,6 +10,9 @@ export const ALLOWLISTED_DMX_SCENES = Object.freeze([
   'rojo_sangre',
   'blackout'
 ]);
+
+/** @deprecated use DEFAULT_DMX_SCENES */
+export const ALLOWLISTED_DMX_SCENES = DEFAULT_DMX_SCENES;
 
 const SCENE_ALIASES = Object.freeze({
   morado_uv: { kind: 'color', color: 'morado', target: 'todas' },
@@ -21,6 +24,22 @@ const DMX_AGENT_ID = 'AG-59_dmx_artnet_orchestrator';
 function loopbackHostname(hostname = '') {
   const host = hostname.toLowerCase();
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+}
+
+export function normalizeSceneName(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+export function extractSupportedScenes(live = {}, fallback = DEFAULT_DMX_SCENES) {
+  const raw = live.supported_scenes ?? live.supportedScenes ?? live.scenes;
+  let scenes = [];
+  if (Array.isArray(raw)) {
+    scenes = raw.map(normalizeSceneName).filter(Boolean);
+  }
+  if (!scenes.length) scenes = [...fallback];
+  const unique = [...new Set(scenes)];
+  if (!unique.includes('blackout')) unique.push('blackout');
+  return Object.freeze(unique);
 }
 
 export function resolveDmxApiUrl(env = process.env) {
@@ -43,7 +62,7 @@ export function dmxStatus(env = process.env) {
     configured: dmxConfigured(env),
     agent: DMX_AGENT_ID,
     coordinatingAgent: 'AG-32_home_assistant_bridge',
-    allowlistedScenes: ALLOWLISTED_DMX_SCENES,
+    allowlistedScenes: DEFAULT_DMX_SCENES,
     executionClaimed: false
   };
 }
@@ -94,14 +113,15 @@ export async function getDmxStatus(options = {}) {
   }
   const live = await dmxFetch('/api/status', {}, env, fetchImpl);
   if (!live.ok) return live;
+  const supportedScenes = extractSupportedScenes(live);
   return {
     ok: true,
     state: 'ready',
     agent: DMX_AGENT_ID,
     coordinatingAgent: 'AG-32_home_assistant_bridge',
     engine: 'inneros-dmx-engine',
-    fixtureCount: 9,
-    supportedScenes: ALLOWLISTED_DMX_SCENES,
+    fixtureCount: Number(live.fixture_count ?? live.fixtureCount) || 9,
+    supportedScenes,
     currentEffect: live.current_effect || live.currentEffect || null,
     running: Boolean(live.running),
     executionClaimed: false
@@ -111,9 +131,15 @@ export async function getDmxStatus(options = {}) {
 export async function setDmxScene(input = {}, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || fetch;
-  const scene = String(input.scene || input.mode || '').trim().toLowerCase();
-  if (!ALLOWLISTED_DMX_SCENES.includes(scene)) {
-    return { ok: false, state: 'rejected', error: 'scene_not_allowlisted', allowlistedScenes: ALLOWLISTED_DMX_SCENES };
+  const scene = normalizeSceneName(input.scene || input.mode);
+  if (!scene) {
+    return { ok: false, state: 'rejected', error: 'scene_required' };
+  }
+
+  const status = await getDmxStatus({ env, fetchImpl });
+  const allowedScenes = status.ok ? status.supportedScenes : DEFAULT_DMX_SCENES;
+  if (!allowedScenes.includes(scene)) {
+    return { ok: false, state: 'rejected', error: 'scene_not_allowlisted', allowlistedScenes: allowedScenes };
   }
   if (scene === 'blackout') return runDmxBlackout(options);
 
