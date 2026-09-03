@@ -953,3 +953,113 @@ if ($('autoLaneBtn')) {
 }
 if ($('executorTarget')?.options?.[0]) $('executorTarget').options[0].textContent = 'Auto · native actions + InnerOS local-first';
 if (($('executorTarget')?.value || 'auto') === 'auto' && $('selectedExecutorLabel')) $('selectedExecutorLabel').textContent = 'AUTO · native + local-first';
+
+
+// Approval-first execution contract: conversation never mutates systems.
+// The latest Copilot answer remains a candidate plan until the owner explicitly approves it.
+nativeAutoObserver.disconnect();
+$('executePlan')?.removeEventListener('click', executePlan);
+$('executePlan')?.removeEventListener('click', interceptDmxSceneCreation, true);
+
+async function verifyBoundProjectForApproval() {
+  const project = $('project')?.value?.trim() || 'inneros-webmcp';
+  const status = await invoke('get_project_status', { project });
+  const valid = Boolean(status?.ok && status?.exists && status?.repo);
+  if (valid) return { ok: true, project, status };
+  bubble('error', 'PROJECT BINDING REQUIRED', `Project "${project}" is not bound to a verified repository/runtime. Typing a new name here does not create a project. Select an existing project before execution.`);
+  setNativeActionHint('EXECUTION BLOCKED · project is not bound to a verified repo/runtime. No task was dispatched.', 'error');
+  addTrace({
+    title: `Execution blocked · unbound project ${project}`,
+    detail: 'Project is a context/binding selector. Entering a new name does not bootstrap a repository or runtime.',
+    state: 'blocked', source: 'BACKEND', confirmed: true
+  });
+  return { ok: false, project, status };
+}
+
+async function approvedExecutePlan(event) {
+  event?.preventDefault?.();
+  event?.stopImmediatePropagation?.();
+  const button = $('executePlan');
+  const instruction = (lastExecutionBrief || lastCopilotPrompt || '').slice(0, 2000);
+  if (!instruction) return;
+
+  const binding = await verifyBoundProjectForApproval();
+  if (!binding.ok) return;
+  const project = binding.project;
+  const target = $('executorTarget')?.value || 'auto';
+
+  button.disabled = true;
+  button.textContent = 'Approved · dispatching…';
+  setNativeActionHint(`APPROVED · executing the latest plan via ${executorLabel(target)}.`, 'active');
+
+  try {
+    if (target === 'auto' && isDmxSceneCreationPrompt(lastCopilotPrompt)) {
+      button.textContent = 'Approved · registering scene…';
+      const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
+      resultEl.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        await refreshDmxSceneSelector(data.supportedScenes || []);
+        const select = $('dmxScene');
+        if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
+        $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
+        setNativeActionHint(`REGISTERED · ${data.label || data.scene} · physical execution still requires Apply scene`, 'ready');
+        bubble('assistant', 'APPROVED · LOCAL QWEN + AG-59', `Registered ${data.label || data.scene} after your approval. It is selected in DMX quick control. The lights have NOT run; Apply scene remains a separate physical action.`);
+        addTrace({
+          title: `Approved native capability registered · ${data.scene}`,
+          detail: 'Owner approval preceded registration. AG-59 confirmed the registry change; physical execution remains separate.',
+          state: 'ready', source: 'BACKEND', confirmed: true,
+          requestId: data?.proof?.requestId || '', backend: data?.proof?.backend || 'local_vllm + dmx_loopback'
+        });
+        lastExecutionBrief = '';
+        button.disabled = true;
+        button.textContent = 'Plan executed · scene registered';
+        return;
+      }
+      bubble('error', 'AG-59 SCENE REGISTRY', `Approved scene creation was blocked: ${data.error || data.state || 'validation failed'}.`);
+      setNativeActionHint(`APPROVED ACTION BLOCKED · ${data.error || data.state || 'validation failed'}`, 'error');
+      return;
+    }
+
+    setFlowStage('archMcp');
+    const data = target === 'auto'
+      ? await invoke('resolve_project_blocker', { project, policy: 'local_first', instruction })
+      : await invoke('dispatch_agent_action', { agent: target, project, instruction });
+    renderMission(data, target);
+    if (data?.dispatchId) {
+      bubble('assistant', 'INNEROS ROUTER', `Approved plan dispatched to ${data?.route?.provider || data?.agent || target}. Dispatch ID: ${data.dispatchId}. Delivery is not completion; Global Live Trace will follow backend evidence.`);
+      setNativeActionHint(`DISPATCHED · ${executorLabel(target)} · waiting for execution evidence`, 'ready');
+    } else if (!data?.ok) {
+      bubble('error', 'INNEROS ROUTER', data?.error || data?.blocker || 'The selected lane could not accept the approved plan.');
+      setNativeActionHint(`DISPATCH BLOCKED · ${data?.error || data?.blocker || 'lane unavailable'}`, 'error');
+    }
+  } finally {
+    if (!button.textContent.startsWith('Plan executed')) {
+      button.disabled = false;
+      button.textContent = 'Approve & Execute Plan';
+    }
+  }
+}
+
+$('executePlan')?.addEventListener('click', approvedExecutePlan, true);
+
+const approvalFirstObserver = new MutationObserver((mutations) => {
+  const assistantReplyAdded = mutations.some((mutation) => [...mutation.addedNodes].some((node) => node?.nodeType === 1 && node.matches?.('.bubble.assistant')));
+  if (!assistantReplyAdded || !lastCopilotPrompt || isCasualPrompt(lastCopilotPrompt)) return;
+  setNativeActionHint('PLAN READY · continue chatting to refine it, or approve and execute the latest plan. Nothing has executed yet.', 'info');
+  if ($('executePlan')) {
+    $('executePlan').disabled = false;
+    $('executePlan').textContent = 'Approve & Execute Plan';
+  }
+});
+if ($('copilotMessages')) approvalFirstObserver.observe($('copilotMessages'), { childList: true });
+
+if ($('autoLaneBtn')) {
+  $('autoLaneBtn').textContent = 'AUTO · local-first';
+  $('autoLaneBtn').title = 'Conversation never executes. After approval, InnerOS uses a native capability when appropriate or routes coding local-first.';
+}
+if ($('executorTarget')?.options?.[0]) $('executorTarget').options[0].textContent = 'Auto · InnerOS local-first after approval';
+if (($('executorTarget')?.value || 'auto') === 'auto' && $('selectedExecutorLabel')) $('selectedExecutorLabel').textContent = 'AUTO · local-first';
+if ($('executePlan')) $('executePlan').textContent = 'Approve & Execute Plan';
+if ($('project')) {
+  $('project').title = 'Existing InnerOS project ID / verified repo binding. Typing a new name does not create a project.';
+}

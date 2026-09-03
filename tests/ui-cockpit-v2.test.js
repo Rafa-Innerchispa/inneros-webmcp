@@ -28,7 +28,6 @@ test('explicit auto and lane selection UI is wired without replacing execution c
   assert.match(app, /CODEX · headless/);
   assert.match(app, /CURSOR · remote inbox/);
   assert.match(app, /ANTIGRAVITY · remote inbox/);
-  assert.match(app, /id|data-agent/);
   assert.match(css, /Cockpit V2/);
 });
 
@@ -39,18 +38,31 @@ test('InnerChispa visual identity is present in the cockpit header', () => {
   assert.match(css, /cockpitAurora/);
 });
 
-
-test('AUTO continues bounded native DMX creation without requiring a second execute click', () => {
-  assert.match(app, /AUTO native action detected · dmx_create_scene/);
-  assert.match(app, /autoRegisterDmxSceneIfEligible/);
-  assert.match(app, /dmx_create_scene/);
-  assert.match(app, /Physical execution remains manual/);
-  assert.match(app, /Scene registered · use Apply scene/);
-  assert.match(css, /native-action-hint/);
+test('approval-first flow prevents conversation from auto-registering native DMX actions', () => {
+  assert.match(app, /nativeAutoObserver\.disconnect\(\)/);
+  assert.match(app, /Approve & Execute Plan/);
+  assert.match(app, /PLAN READY · continue chatting to refine it/);
+  assert.match(app, /approvedExecutePlan/);
 });
 
-test('explicit provider lanes are not hijacked by AUTO native DMX interception', () => {
-  assert.match(app, /target === 'auto'/);
-  assert.match(app, /originalPrompt = lastCopilotPrompt/);
-  assert.match(app, /regular execution handler then dispatches that lane/);
+test('execution validates an existing bound project before any lane dispatch', () => {
+  assert.match(app, /verifyBoundProjectForApproval/);
+  assert.match(app, /get_project_status/);
+  assert.match(app, /Typing a new name here does not create a project/);
+  assert.match(app, /status\?\.exists && status\?\.repo/);
+});
+
+test('AUTO native DMX registration happens only inside approved execution handler', () => {
+  const approvedStart = app.indexOf('async function approvedExecutePlan');
+  const dmxCall = app.indexOf("invoke('dmx_create_scene'", approvedStart);
+  assert.ok(approvedStart >= 0 && dmxCall > approvedStart);
+  assert.match(app.slice(approvedStart, dmxCall + 250), /target === 'auto'/);
+});
+
+test('explicit provider lanes remain explicit after approval-first change', () => {
+  const approvedStart = app.indexOf('async function approvedExecutePlan');
+  const approvedBody = app.slice(approvedStart);
+  assert.match(approvedBody, /dispatch_agent_action/);
+  assert.match(approvedBody, /agent: target/);
+  assert.match(approvedBody, /target === 'auto'/);
 });
