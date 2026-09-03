@@ -132,6 +132,6 @@ test('visible WebMCP count is normalized to the current 13-tool surface', () => 
 
 
 test('public browser bundle remains syntactically valid after composer polish', () => {
-  const parseable = app.replace(/^import\s+[^;]+;\s*/m, '');
+  const parseable = app.replace(/^import\s+[^;]+;\s*/gm, '');
   assert.doesNotThrow(() => new Function(parseable));
 });

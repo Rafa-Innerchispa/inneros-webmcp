@@ -1,4 +1,5 @@
 import { installBrowserWebMCP } from '/webmcp.js';
+import { initDmxExperience, applyDmxRegistry, onSceneRegistered, renderScenePreview } from './dmx-ux.js';
 
 const $ = (id) => document.getElementById(id);
 const traceEl = $('trace');
@@ -188,25 +189,6 @@ async function invoke(name, input = {}, { trace = true } = {}) {
   return data;
 }
 
-
-function formatDmxSceneLabel(scene = '') {
-  return String(scene).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-async function refreshDmxSceneSelector(supportedScenes = []) {
-  const select = $('dmxScene');
-  if (!select || !Array.isArray(supportedScenes) || !supportedScenes.length) return;
-  const selectable = supportedScenes.filter((scene) => scene && scene !== 'blackout');
-  if (!selectable.length) return;
-  const current = select.value;
-  select.replaceChildren(...selectable.map((scene) => {
-    const option = document.createElement('option');
-    option.value = scene;
-    option.textContent = formatDmxSceneLabel(scene);
-    return option;
-  }));
-  if (selectable.includes(current)) select.value = current;
-}
 
 function bubble(role, label, message) {
   const article = document.createElement('article');
@@ -506,7 +488,7 @@ async function boot() {
     if (health.dmx?.configured) {
       try {
         const dmx = await invoke('dmx_status', {});
-        if (dmx.ok) await refreshDmxSceneSelector(dmx.supportedScenes || []);
+        if (dmx.ok) applyDmxRegistry(dmx);
       } catch { /* non-fatal boot refresh */ }
     }
     setFlowStage('archHuman', { confirmed: true });
@@ -524,23 +506,7 @@ $('logoutBtn')?.addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.replace('/login.html');
 });
-$('dmxStatusBtn')?.addEventListener('click', async () => {
-  const data = await invoke('dmx_status', {});
-  $('dmxState').textContent = data.ok ? `AG-59 ready · ${data.fixtureCount || 9} fixtures · effect ${data.currentEffect || 'idle'}` : `DMX unavailable · ${data.error || 'unknown'}`;
-  if (data.ok) await refreshDmxSceneSelector(data.supportedScenes || []);
-  bubble('assistant', 'AG-59 DMX', data.ok ? `Stage status: ${data.running ? 'running' : 'idle'}. Supported scenes: ${(data.supportedScenes || []).join(', ')}.` : `DMX unavailable: ${data.error || 'engine offline'}`);
-});
-$('dmxSceneBtn')?.addEventListener('click', async () => {
-  const scene = $('dmxScene')?.value || 'rainbow';
-  const data = await invoke('dmx_set_scene', { scene });
-  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? `Applied scene ${scene}.` : `Scene blocked: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = `AG-59 applied · ${scene}`;
-});
-$('dmxBlackoutBtn')?.addEventListener('click', async () => {
-  const data = await invoke('dmx_blackout', {});
-  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? 'Blackout applied.' : `Blackout failed: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = 'AG-59 blackout applied';
-});
+// DMX controls: initDmxExperience()
 $('refreshEvidence').addEventListener('click', () => refreshEvidence({ silent: false }));
 $('clearTrace').addEventListener('click', () => {
   traceEl.replaceChildren();
@@ -550,6 +516,7 @@ $('clearTrace').addEventListener('click', () => {
   traceEl.append(empty);
 });
 
+initDmxExperience({ invoke, bubble, addTrace });
 boot();
 
 
@@ -671,7 +638,7 @@ async function pollDmxRegistry() {
     if (!fingerprint) return;
     const changed = Boolean(dmxRegistryFingerprint) && fingerprint !== dmxRegistryFingerprint;
     dmxRegistryFingerprint = fingerprint;
-    await refreshDmxSceneSelector(scenes);
+    applyDmxRegistry({ ok: true, supportedScenes: scenes, sceneCatalog: data?.sceneCatalog || [] });
 
     if (changed) {
       addTrace({
@@ -717,7 +684,7 @@ async function interceptDmxSceneCreation(event) {
     const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
     resultEl.textContent = JSON.stringify(data, null, 2);
     if (data.ok) {
-      await refreshDmxSceneSelector(data.supportedScenes || []);
+      onSceneRegistered(data);
       const select = $('dmxScene');
       if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
       $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -876,7 +843,7 @@ async function autoRegisterDmxSceneIfEligible() {
     const data = await invoke('dmx_create_scene', { description: prompt });
     resultEl.textContent = JSON.stringify(data, null, 2);
     if (data.ok) {
-      await refreshDmxSceneSelector(data.supportedScenes || []);
+      onSceneRegistered(data);
       const select = $('dmxScene');
       if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
       $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -998,7 +965,7 @@ async function approvedExecutePlan(event) {
       const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
       resultEl.textContent = JSON.stringify(data, null, 2);
       if (data.ok) {
-        await refreshDmxSceneSelector(data.supportedScenes || []);
+        onSceneRegistered(data);
         const select = $('dmxScene');
         if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
         $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -1278,7 +1245,7 @@ async function approvedExecuteWithContext() {
       const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
       resultEl.textContent = JSON.stringify(data, null, 2);
       if (data.ok) {
-        await refreshDmxSceneSelector(data.supportedScenes || []);
+        onSceneRegistered(data);
         const select = $('dmxScene');
         if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
         $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
