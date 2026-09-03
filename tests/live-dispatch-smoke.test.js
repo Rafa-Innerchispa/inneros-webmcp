@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { applyLiveSmokeSkip, prepareLiveSmokeAuth } from './live-smoke-auth.js';
 
-test('live WebMCP dispatch creates a durable local A2A task', { skip: Boolean(process.env.CI) }, async () => {
-  const dispatchResponse = await fetch('http://127.0.0.1:5195/api/tools/dispatch_agent_action', {
+test('live WebMCP dispatch creates a durable local A2A task', { skip: Boolean(process.env.CI) }, async (t) => {
+  const auth = await prepareLiveSmokeAuth();
+  applyLiveSmokeSkip(t, auth);
+
+  const dispatchResponse = await fetch(`${auth.baseUrl}/api/tools/dispatch_agent_action`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: auth.headers,
     body: JSON.stringify({
       agent: 'local',
       project: 'inneros-webmcp',
@@ -20,9 +24,9 @@ test('live WebMCP dispatch creates a durable local A2A task', { skip: Boolean(pr
   assert.equal(dispatch.proof?.backend, 'mcp_loopback');
   assert.match(dispatch.proof?.requestId || '', /^wmcp_req_/);
 
-  const traceResponse = await fetch('http://127.0.0.1:5195/api/tools/get_execution_trace', {
+  const traceResponse = await fetch(`${auth.baseUrl}/api/tools/get_execution_trace`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: auth.headers,
     body: JSON.stringify({ dispatchId: dispatch.dispatchId })
   });
   const trace = await traceResponse.json();

@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { applyLiveSmokeSkip, prepareLiveSmokeAuth } from './live-smoke-auth.js';
 
-test('live WebMCP service reaches the local coding model', { skip: Boolean(process.env.CI) }, async () => {
-  const response = await fetch('http://127.0.0.1:5195/api/tools/ask_inneros_copilot', {
+test('live WebMCP service reaches the local coding model', { skip: Boolean(process.env.CI) }, async (t) => {
+  const auth = await prepareLiveSmokeAuth();
+  applyLiveSmokeSkip(t, auth);
+
+  const response = await fetch(`${auth.baseUrl}/api/tools/ask_inneros_copilot`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: auth.headers,
     body: JSON.stringify({
       project: 'inneros-webmcp',
       message: 'Reply briefly with a safe plan for one read-only status field and one focused test. Do not execute anything.'
