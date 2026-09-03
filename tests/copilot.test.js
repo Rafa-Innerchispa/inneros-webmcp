@@ -117,3 +117,25 @@ test('DMX designer prompt preserves explicit names and converts flash to bounded
   assert.match(requestBody.messages[0].content, /preserve that human name/);
   assert.match(requestBody.messages[0].content, /alternate that requested color with blackout/);
 });
+
+
+test('DMX Copilot cannot claim registration before AG-59 evidence exists', async () => {
+  const result = await askInnerOSCopilot({
+    project: 'inneros-webmcp',
+    message: 'crea una escena flash roja para todas las luces y llamala flash rojo'
+  }, {
+    env: { INNEROS_COPILOT_URL: 'http://127.0.0.1:18000/v1/chat/completions', INNEROS_COPILOT_MODEL: 'test-model' },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: 'The scene has been created and registered. EXECUTION BRIEF: done' } }] };
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.nativeAction, 'dmx_create_scene');
+  assert.match(result.message, /No scene has been registered yet/);
+  assert.match(result.message, /will now ask the local Qwen scene designer/);
+  assert.doesNotMatch(result.message, /has been created and registered/);
+  assert.equal(result.executionClaimed, false);
+});
