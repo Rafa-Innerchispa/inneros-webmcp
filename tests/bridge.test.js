@@ -10,7 +10,7 @@ test('registers all WebMCP tools when browser API exists', () => {
   const result = registerInnerOSWebMCP(context, async () => ({ ok: true }));
   assert.equal(result.supported, true);
   assert.deepEqual(result.registered, TOOL_NAMES);
-  assert.equal(seen.length, 8);
+  assert.equal(seen.length, TOOL_NAMES.length);
   assert.ok(seen.every((tool) => typeof tool.execute === 'function'));
   assert.ok(seen.some((tool) => tool.name === 'ask_inneros_copilot'));
 });

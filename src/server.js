@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { invokeTool, getPolicy } from './bridge.js';
 import { adapterStatus } from './inneros-adapter.js';
 import { copilotStatus } from './copilot.js';
+import { dmxStatus } from './dmx-bridge.js';
 import { TOOL_NAMES } from './webmcp.js';
 import {
   authStatus,
@@ -75,7 +76,8 @@ const server = http.createServer(async (req, res) => {
         webmcpTools: TOOL_NAMES.length,
         auth: status,
         adapter: adapterStatus(),
-        copilot: copilotStatus()
+        copilot: copilotStatus(),
+        dmx: dmxStatus()
       });
     }
 

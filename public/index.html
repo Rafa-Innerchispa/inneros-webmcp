@@ -106,6 +106,27 @@
           <p class="lane-note">Availability, delivery and execution are different states. A lane can accept a task without claiming that a process is already running.</p>
         </section>
 
+        <section class="panel dmx-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">PHYSICAL WORLD · AG-57</p><h2>DMX stage orchestrator</h2></div>
+            <span id="dmxState" class="muted">Checking DMX bridge…</span>
+          </div>
+          <p class="lane-note">Safe allowlisted scenes only. Routes through AntiGravity-built inneros-dmx-engine (9 fixtures on Pknight CR011R). No raw channel writes from the public page.</p>
+          <div class="dmx-actions">
+            <button id="dmxStatusBtn" class="secondary" type="button">DMX status</button>
+            <select id="dmxScene">
+              <option value="rainbow">Rainbow</option>
+              <option value="frenzy">Frenzy</option>
+              <option value="morado_uv">Morado UV</option>
+              <option value="rojo_sangre">Rojo sangre</option>
+              <option value="chill_lounge">Chill lounge</option>
+              <option value="blackout">Blackout</option>
+            </select>
+            <button id="dmxSceneBtn" type="button">Apply scene</button>
+            <button id="dmxBlackoutBtn" class="secondary" type="button">Blackout now</button>
+          </div>
+        </section>
+
         <section id="missionSummary" class="panel mission-panel" hidden>
           <div class="section-heading"><div><p class="eyebrow">CURRENT EXECUTION</p><h2>Backend-confirmed mission</h2></div><span id="missionState" class="state-pill">Pending</span></div>
           <div class="mission-summary">

@@ -79,6 +79,9 @@ button:disabled{opacity:.42;cursor:not-allowed}
 .bubble.assistant{align-self:flex-start;background:#0c2024;border:1px solid #1d4145}
 .bubble.user{align-self:flex-end;background:#12241f;border:1px solid #285545}
 .bubble.error{align-self:flex-start;background:#271613;border:1px solid #6b3830}
+.dmx-panel{padding:20px}
+.dmx-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.dmx-actions select{max-width:220px}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
 .cards article{position:relative;display:flex;gap:9px;align-items:flex-start;min-height:110px;padding:12px;border:1px solid #19363d;border-radius:14px;background:#09171c;cursor:pointer;transition:.18s ease}
 .cards article:hover,.cards article.selected{border-color:#477a73;background:#0b1f21;transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.15)}

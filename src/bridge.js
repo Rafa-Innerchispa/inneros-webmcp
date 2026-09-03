@@ -1,5 +1,6 @@
 import { adapterConfigured, callInnerOS } from './inneros-adapter.js';
 import { askInnerOSCopilot, copilotStatus } from './copilot.js';
+import { dmxStatus, getDmxStatus, setDmxScene, runDmxBlackout } from './dmx-bridge.js';
 
 const AGENTS = Object.freeze([
   { id: 'codex', label: 'Codex', transport: 'headless', capability: 'CLI execution', verification: 'verified adapter' },
@@ -32,6 +33,7 @@ export function getPolicy() {
     executionPolicy: 'local_first',
     adapterConfigured: adapterConfigured(),
     copilot: copilotStatus(),
+    dmx: dmxStatus(),
     writesRequireBridge: true,
     truthRule: 'configured capability is never presented as running execution'
   };
@@ -134,6 +136,10 @@ export async function invokeTool(name, input = {}) {
     }
     return unavailable(name);
   }
+
+  if (name === 'dmx_status') return getDmxStatus();
+  if (name === 'dmx_set_scene') return setDmxScene(input);
+  if (name === 'dmx_blackout') return runDmxBlackout();
 
   return { ok: false, state: 'rejected', error: 'tool_not_allowlisted' };
 }

@@ -18,13 +18,37 @@
 4. **Live trace enrichment** — delivery/execution/transport metadata on backend-confirmed events
 5. **Regression tests** — `tests/auth.test.js`, `tests/chat-semantics.test.js`
 
-## DMX status (truthful blocker)
+## DMX / AG-57 (corrected after AntiGravity coordination review)
 
-Live `get_agent_catalog(functional_only=true)` returned **55 agents, zero DMX/AG-57 matches** on 2026-09-03. Do **not** add public DMX WebMCP tools until AG-57/AG-32 contract is registered and callable through the existing MCP/A2A bridge. Existing AntiGravity proof (`docs/ANTIGRAVITY_EXECUTION_PROOF.md` on its branch) should be consumed as historical evidence only.
+AntiGravity built and documented **inneros-dmx-engine** + **AG-57_dmx_artnet_orchestrator** (see coordination notes under `/home/rlopez/data/ai_coordination/chatgpt/notes/20260903_032441_*` and AG-32 handoff). Prior blocker was **stale MCP process**, not missing code.
+
+### What AntiGravity delivered
+
+- Repo: `Rafa-Innerchispa/inneros-dmx-engine` @ `/home/rlopez/projects/inneros-dmx-engine`
+- REST API on `:8096` — `/api/status`, `/api/scene`, `/api/color`, `/api/blackout`, `/api/intent`
+- 9 fixtures mapped (channels 1–87) on Pknight CR011R @ Art-Net universe 0
+- Scenes: `rainbow`, `frenzy`, `police`, `fire`, `chill_lounge`, `morado_uv`, `blackout`
+- AG-32 coordinates HA + Hubitat + Broadlink + DMX; AG-57 owns stage lighting only
+
+### What Cursor fixed in this slice
+
+1. **Platform runner** — `ag57_dmx_orchestrator.py` registered in `pool_agent_runners.py`; catalog entry with `mcp_tools`
+2. **MCP live** — restart `ralfia-mcp.service`; `get_agent_catalog(functional_only=true)` now includes **AG-57** (56 agents); `dmx_status` callable
+3. **DMX engine service** — `inneros-dmx-engine.service` enabled on user systemd; `:8096/health` online
+4. **WebMCP bridge** — `src/dmx-bridge.js` (private HTTP only, scene allowlist, topology sanitization)
+5. **Site Tools** — 11 tools (+ `dmx_status`, `dmx_set_scene`, `dmx_blackout`)
+6. **UI panel** — public DMX panel in `index.html` / `app.js` (allowlisted scenes only, no raw channel writes)
+
+### Live verification (2026-09-03)
+
+- `invoke_agent("AG-57", dry_run=true)` → ping OK, 9 fixtures
+- `dmx_status` MCP → 9 fixtures, engine online
+- `inneros-dmx-engine` health → online
+- Unit tests: **30/32 PASS** (2 live-smoke need WebMCP on `:5195`)
 
 ## Test state
 
-- Unit/regression suite: **27/27 PASS** when live-smoke service is not running (2 live tests need `:5195`)
+- Unit/regression suite: **30/32 PASS** when live-smoke service is not running (2 live tests need `:5195`)
 - With live service up: expected **22/22** baseline from prior handoff
 
 ## Deploy checklist (still required)
@@ -39,7 +63,8 @@ Live `get_agent_catalog(functional_only=true)` returned **55 agents, zero DMX/AG
 4. Public verify:
    - login → unified chat → real Qwen greeting → no auto-dispatch
    - explicit execute → durable dispatch ID → trace/evidence
-   - 8 Site Tools still discoverable in ChatGPT browser after auth session
+   - 11 Site Tools still discoverable in ChatGPT browser after auth session
+   - DMX panel: status → apply allowlisted scene → blackout (requires `INNEROS_DMX_API_URL` on runtime)
 
 ## Evidence refs
 
@@ -51,5 +76,5 @@ Live `get_agent_catalog(functional_only=true)` returned **55 agents, zero DMX/AG
 
 1. Deploy + public browser verification (AG-55)
 2. Public Codex E2E with durable `ide_...` ID through same page
-3. Reconcile DMX only if catalog exposes safe AG-57 tools
+3. DMX wow-factor demo once WebMCP is deployed with `INNEROS_DMX_API_URL=http://127.0.0.1:8096`
 4. Owner handles video + Devpost submit manually
