@@ -18,33 +18,23 @@
 4. **Live trace enrichment** — delivery/execution/transport metadata on backend-confirmed events
 5. **Regression tests** — `tests/auth.test.js`, `tests/chat-semantics.test.js`
 
-## DMX / AG-57 (corrected after AntiGravity coordination review)
+## DMX / AG-59 (reconciled per coordination msg_d65c30e23464a64f)
 
-AntiGravity built and documented **inneros-dmx-engine** + **AG-57_dmx_artnet_orchestrator** (see coordination notes under `/home/rlopez/data/ai_coordination/chatgpt/notes/20260903_032441_*` and AG-32 handoff). Prior blocker was **stale MCP process**, not missing code.
+**Canonical ID:** `AG-59_dmx_artnet_orchestrator` (NOT AG-57 — collision with Backlog Steward).
 
-### What AntiGravity delivered
+AntiGravity built **inneros-dmx-engine** (historical proof under AG-57 label). InnerOS canonical runtime uses AG-59 subordinate to AG-32.
 
-- Repo: `Rafa-Innerchispa/inneros-dmx-engine` @ `/home/rlopez/projects/inneros-dmx-engine`
-- REST API on `:8096` — `/api/status`, `/api/scene`, `/api/color`, `/api/blackout`, `/api/intent`
-- 9 fixtures mapped (channels 1–87) on Pknight CR011R @ Art-Net universe 0
-- Scenes: `rainbow`, `frenzy`, `police`, `fire`, `chill_lounge`, `morado_uv`, `blackout`
-- AG-32 coordinates HA + Hubitat + Broadlink + DMX; AG-57 owns stage lighting only
+### Backend contract (loopback-only)
 
-### What Cursor fixed in this slice
+- Local API: `http://127.0.0.1:18796` (dedicated port; 8096–8099 occupied)
+- Bind: `127.0.0.1` only (`DMX_API_HOST=127.0.0.1`)
+- No public LAN topology in WebMCP responses
 
-1. **Platform runner** — `ag57_dmx_orchestrator.py` registered in `pool_agent_runners.py`; catalog entry with `mcp_tools`
-2. **MCP live** — restart `ralfia-mcp.service`; `get_agent_catalog(functional_only=true)` now includes **AG-57** (56 agents); `dmx_status` callable
-3. **DMX engine service** — `inneros-dmx-engine.service` enabled on user systemd; `:8096/health` online
-4. **WebMCP bridge** — `src/dmx-bridge.js` (private HTTP only, scene allowlist, topology sanitization)
-5. **Site Tools** — 11 tools (+ `dmx_status`, `dmx_set_scene`, `dmx_blackout`)
-6. **UI panel** — public DMX panel in `index.html` / `app.js` (allowlisted scenes only, no raw channel writes)
+### Deploy repairs pending
 
-### Live verification (2026-09-03)
-
-- `invoke_agent("AG-57", dry_run=true)` → ping OK, 9 fixtures
-- `dmx_status` MCP → 9 fixtures, engine online
-- `inneros-dmx-engine` health → online
-- Unit tests: **30/32 PASS** (2 live-smoke need WebMCP on `:5195`)
+1. **Auth** — `WEBMCP_AUTH_REQUIRED=true` + session secret + judge credentials in systemd env (not repo)
+2. **DMX env** — `INNEROS_DMX_API_URL=http://127.0.0.1:18796` on same node as WebMCP
+3. **Platform** — AG-59 in catalog/runners; AG-57 restored as Backlog Steward
 
 ## Test state
 

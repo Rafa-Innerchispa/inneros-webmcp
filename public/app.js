@@ -436,7 +436,7 @@ async function boot() {
     $('adapterState').textContent = health.adapter?.mode === 'mcp_loopback' ? 'MCP loopback · live' : (health.adapter?.mode || 'Unavailable');
     $('adapterDetail').textContent = health.adapter?.configured ? 'Private backend connected' : 'Adapter not connected';
     $('toolCount').textContent = `${health.webmcpTools || 0} WebMCP`;
-    $('dmxState').textContent = health.dmx?.configured ? 'AG-57 bridge configured' : 'DMX API not configured';
+    $('dmxState').textContent = health.dmx?.configured ? 'AG-59 bridge configured' : 'DMX API not configured';
     $('copilotBadge').textContent = health.copilot?.configured ? 'Local Qwen3-Coder · configured · verify on Ask' : 'Local copilot not configured';
     $('copilotBadge').classList.toggle('ok', false);
     if (health.copilot?.model) $('modelLabel').textContent = `${health.copilot.provider || 'Local AMD'} · ${health.copilot.runtime || 'vLLM'} · configured`;
@@ -500,19 +500,19 @@ $('logoutBtn')?.addEventListener('click', async () => {
 });
 $('dmxStatusBtn')?.addEventListener('click', async () => {
   const data = await invoke('dmx_status', {});
-  $('dmxState').textContent = data.ok ? `AG-57 ready · ${data.fixtureCount || 9} fixtures · effect ${data.currentEffect || 'idle'}` : `DMX unavailable · ${data.error || 'unknown'}`;
-  bubble('assistant', 'AG-57 DMX', data.ok ? `Stage status: ${data.running ? 'running' : 'idle'}. Supported scenes: ${(data.supportedScenes || []).join(', ')}.` : `DMX unavailable: ${data.error || 'engine offline'}`);
+  $('dmxState').textContent = data.ok ? `AG-59 ready · ${data.fixtureCount || 9} fixtures · effect ${data.currentEffect || 'idle'}` : `DMX unavailable · ${data.error || 'unknown'}`;
+  bubble('assistant', 'AG-59 DMX', data.ok ? `Stage status: ${data.running ? 'running' : 'idle'}. Supported scenes: ${(data.supportedScenes || []).join(', ')}.` : `DMX unavailable: ${data.error || 'engine offline'}`);
 });
 $('dmxSceneBtn')?.addEventListener('click', async () => {
   const scene = $('dmxScene')?.value || 'rainbow';
   const data = await invoke('dmx_set_scene', { scene });
-  bubble(data.ok ? 'assistant' : 'error', 'AG-57 DMX', data.ok ? `Applied scene ${scene}.` : `Scene blocked: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = `AG-57 applied · ${scene}`;
+  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? `Applied scene ${scene}.` : `Scene blocked: ${data.error || data.state}`);
+  if (data.ok) $('dmxState').textContent = `AG-59 applied · ${scene}`;
 });
 $('dmxBlackoutBtn')?.addEventListener('click', async () => {
   const data = await invoke('dmx_blackout', {});
-  bubble(data.ok ? 'assistant' : 'error', 'AG-57 DMX', data.ok ? 'Blackout applied.' : `Blackout failed: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = 'AG-57 blackout applied';
+  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? 'Blackout applied.' : `Blackout failed: ${data.error || data.state}`);
+  if (data.ok) $('dmxState').textContent = 'AG-59 blackout applied';
 });
 $('refreshEvidence').addEventListener('click', () => refreshEvidence({ silent: false }));
 $('clearTrace').addEventListener('click', () => {

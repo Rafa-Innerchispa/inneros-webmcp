@@ -73,11 +73,11 @@ const definitions = {
     inputSchema: { type: 'object', properties: { taskId: { type: 'string', maxLength: 160 }, dispatchId: { type: 'string', maxLength: 200 } }, additionalProperties: false }
   },
   dmx_status: {
-    description: 'Read-only status for the allowlisted AG-57 DMX stage orchestrator (fixture count, current effect, supported scenes). Never exposes private network topology.',
+    description: 'Read-only status for the allowlisted AG-59 DMX stage orchestrator (fixture count, current effect, supported scenes). Never exposes private network topology.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
   },
   dmx_set_scene: {
-    description: 'Apply an allowlisted DMX scene through AG-57 / inneros-dmx-engine. Scenes: rainbow, frenzy, police, fire, chill_lounge, morado_uv, rojo_sangre, blackout.',
+    description: 'Apply an allowlisted DMX scene through AG-59 / inneros-dmx-engine. Scenes: rainbow, frenzy, police, fire, chill_lounge, morado_uv, rojo_sangre, blackout.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,7 +89,7 @@ const definitions = {
     }
   },
   dmx_blackout: {
-    description: 'Immediate safe blackout for all allowlisted DMX fixtures through AG-57.',
+    description: 'Immediate safe blackout for all allowlisted DMX fixtures through AG-59.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
   }
 };
