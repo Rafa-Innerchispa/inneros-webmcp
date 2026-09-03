@@ -429,3 +429,141 @@ button:hover:not(:disabled){filter:brightness(1.06);box-shadow:0 10px 28px rgba(
   color: #ffe2ad;
 }
 #voiceBtn[disabled] { opacity: .48; cursor: not-allowed; }
+
+
+/* Chat-first composer polish: familiar controls, clearer send action and subtle InnerOS artwork. */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  opacity:.22;
+  background-position:center 12%;
+  background-size:min(1700px,120vw) auto;
+  background-repeat:no-repeat;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%238f6dff'/%3E%3Cstop offset='.55' stop-color='%2353d8ff'/%3E%3Cstop offset='1' stop-color='%23d875ff'/%3E%3C/linearGradient%3E%3CradialGradient id='n'%3E%3Cstop stop-color='%23fff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%238f6dff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg fill='none' stroke='url(%23g)' stroke-opacity='.24' stroke-width='1.4'%3E%3Cpath d='M-80 650 C210 420 300 740 560 520 S940 210 1180 450 1460 600 1700 310'/%3E%3Cpath d='M-40 330 C220 540 430 180 700 390 S1080 720 1350 430 1570 250 1690 410'/%3E%3Cpath d='M110 910 C330 610 560 900 780 650 S1110 320 1510 720'/%3E%3Cpath d='M60 110 C340 260 520 70 790 210 S1190 180 1510 80'/%3E%3C/g%3E%3Cg fill='url(%23n)'%3E%3Ccircle cx='170' cy='560' r='22'/%3E%3Ccircle cx='390' cy='300' r='18'/%3E%3Ccircle cx='590' cy='520' r='26'/%3E%3Ccircle cx='810' cy='350' r='20'/%3E%3Ccircle cx='1010' cy='560' r='27'/%3E%3Ccircle cx='1240' cy='400' r='20'/%3E%3Ccircle cx='1430' cy='610' r='24'/%3E%3Ccircle cx='700' cy='760' r='18'/%3E%3Ccircle cx='1110' cy='250' r='17'/%3E%3C/g%3E%3C/svg%3E");
+  filter:saturate(.9);
+}
+.cockpit-shell{background:linear-gradient(150deg,rgba(12,11,23,.91),rgba(6,7,14,.94));backdrop-filter:blur(15px)}
+.cockpit-chat{background:linear-gradient(180deg,rgba(15,14,28,.93),rgba(8,9,17,.95));backdrop-filter:blur(17px)}
+.cockpit-trace{background:linear-gradient(180deg,rgba(11,12,23,.94),rgba(6,7,14,.96));backdrop-filter:blur(15px)}
+
+.modern-composer{
+  border:1px solid rgba(119,101,177,.48);
+  border-radius:20px;
+  padding:9px 10px 8px;
+  background:linear-gradient(180deg,rgba(19,17,32,.97),rgba(11,11,21,.98));
+  box-shadow:0 12px 36px rgba(0,0,0,.24),0 0 0 1px rgba(255,255,255,.018) inset;
+}
+.modern-composer:focus-within{
+  border-color:rgba(151,122,255,.72);
+  box-shadow:0 14px 42px rgba(0,0,0,.28),0 0 0 3px rgba(143,109,255,.07);
+}
+.modern-composer .composer-label{
+  display:block;
+  height:0;
+  width:0;
+  overflow:hidden;
+  opacity:0;
+  pointer-events:none;
+}
+.modern-composer #copilotPrompt{
+  min-height:64px;
+  max-height:170px;
+  padding:9px 8px 4px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  resize:none;
+  font-size:.82rem;
+  line-height:1.5;
+}
+.modern-composer #copilotPrompt:focus{border:0;box-shadow:none}
+.modern-composer #copilotPrompt::placeholder{color:#6f6983}
+
+.attachment-tray{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-height:0;
+  padding:0 5px;
+  margin:0;
+  border:0;
+  background:transparent;
+  overflow:hidden;
+}
+.attachment-tray #attachmentState{
+  max-width:44%;
+  color:#6f6983;
+  font-size:.58rem;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.attachment-tray .context-chips{flex:1;min-width:0;flex-wrap:nowrap;overflow:auto;padding:1px 0}
+.attachment-tray .context-chip{font-size:.57rem;padding:3px 7px;flex:0 0 auto}
+.attachment-tray .context-actions{display:none!important}
+
+.composer-control-row,.composer-secondary-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.composer-control-row{padding-top:5px}
+.composer-secondary-row{margin-top:7px;padding-top:7px;border-top:1px solid rgba(119,101,177,.18)}
+.composer-icon-tools,.composer-send-tools{display:flex;align-items:center;gap:6px}
+.composer-send-tools{justify-content:flex-end;min-width:0}
+.composer-icon-button{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid transparent;
+  border-radius:50%;
+  background:transparent;
+  color:#aaa2c2;
+  box-shadow:none;
+}
+.composer-icon-button:hover:not(:disabled){transform:none;background:#191628;border-color:#3b3355;color:#f0edff;box-shadow:none}
+.composer-icon-button:disabled{opacity:.28}
+.composer-icon-button.active,.composer-icon-button[data-state="recording"]{background:rgba(143,109,255,.16);border-color:#6954a4;color:#d8ceff}
+.composer-icon-button[data-state="recording"]{color:#ffb1c1;border-color:#744158;background:rgba(145,49,75,.18);animation:voicePulse 1.2s ease-in-out infinite alternate}
+@keyframes voicePulse{from{box-shadow:0 0 0 0 rgba(255,126,152,.08)}to{box-shadow:0 0 0 5px rgba(255,126,152,.06)}}
+.composer-icon-button svg,.composer-send-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.composer-icon-button rect{fill:currentColor;stroke:none}
+#sendHint{color:#635d76;font-size:.54rem;white-space:nowrap}
+.composer-send-button{
+  min-width:74px;
+  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:0 10px 0 13px;
+  border-radius:999px;
+  background:linear-gradient(135deg,#a98cff,#6bdcff);
+  color:#090813;
+  box-shadow:0 8px 24px rgba(119,86,255,.17);
+}
+.composer-send-button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 28px rgba(119,86,255,.25)}
+.composer-send-button .send-label{font-size:.67rem;font-weight:900}
+.composer-send-button svg{width:16px;height:16px;stroke-width:2.2}
+.approval-button{
+  flex:0 0 auto;
+  padding:7px 11px;
+  border-radius:10px;
+  font-size:.62rem;
+  background:#141121;
+  border-color:#4a3c70;
+  color:#c6bce4;
+}
+.modern-composer .history-controls{flex:1;min-width:0;font-size:.54rem}
+.modern-composer .history-controls span{max-width:360px}
+
+@media(max-width:760px){
+  .attachment-tray #attachmentState{display:none}
+  #sendHint{display:none}
+  .composer-send-button{min-width:40px;width:40px;padding:0;border-radius:50%}
+  .composer-send-button .send-label{display:none}
+  .composer-secondary-row{align-items:flex-end}
+  .approval-button{max-width:52%;white-space:normal}
+}
