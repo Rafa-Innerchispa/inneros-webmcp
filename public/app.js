@@ -1,0 +1,467 @@
+import { installBrowserWebMCP } from '/webmcp.js';
+
+const $ = (id) => document.getElementById(id);
+const traceEl = $('trace');
+const resultEl = $('result');
+const FLOW_IDS = ['archHuman', 'archWebmcp', 'archBridge', 'archMcp', 'archExecutor', 'archEvidence'];
+const LANE_DEFAULTS = [
+  { id: 'local', label: 'Local AMD', transport: 'vLLM + durable A2A', capability: 'Qwen3-Coder + local execution', verification: 'runtime health is verified separately' },
+  { id: 'codex', label: 'Codex', transport: 'verified adapter', capability: 'coding execution lane', verification: 'process evidence required' },
+  { id: 'cursor', label: 'Cursor', transport: 'native ACP', capability: 'IDE coding agent', verification: 'ACP lifecycle evidence' },
+  { id: 'antigravity', label: 'AntiGravity', transport: 'IDE / headless bridge', capability: 'coding task lane', verification: 'session evidence required' }
+];
+
+let lastDispatchId = '';
+let lastCopilotPrompt = '';
+let lastExecutionBrief = '';
+let evidenceTimer = null;
+let evidenceBusy = false;
+
+function safeDetail(value) {
+  if (typeof value === 'string') return value;
+  try { return JSON.stringify(value); } catch { return ''; }
+}
+
+function short(value, max = 110) {
+  const s = safeDetail(value || '');
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function setFlowStage(id, { confirmed = false, degraded = false } = {}) {
+  const target = FLOW_IDS.indexOf(id);
+  if (target < 0) return;
+  FLOW_IDS.forEach((flowId, index) => {
+    const el = $(flowId);
+    if (!el) return;
+    el.classList.remove('active', 'degraded');
+    if (index < target) el.classList.add('verified');
+    if (index === target) {
+      el.classList.toggle('verified', confirmed && !degraded);
+      el.classList.toggle('degraded', degraded);
+      el.classList.add('active');
+    }
+  });
+  document.querySelectorAll('.arch-link').forEach((link, index) => {
+    link.classList.toggle('flowing', index === target - 1 || (target === 0 && index === 0));
+  });
+}
+
+function settleFlow() {
+  FLOW_IDS.forEach((id) => $(id)?.classList.remove('active'));
+  document.querySelectorAll('.arch-link').forEach((link) => link.classList.remove('flowing'));
+}
+
+function addTrace(event) {
+  const empty = traceEl.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const row = document.createElement('article');
+  row.className = `event ${event.state || 'info'}`;
+
+  const time = document.createElement('time');
+  time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const body = document.createElement('div');
+  const head = document.createElement('div');
+  head.className = 'event-head';
+  const title = document.createElement('strong');
+  title.textContent = event.title || 'Event';
+  const source = document.createElement('span');
+  source.className = `source-chip ${event.confirmed ? 'confirmed' : ''}`;
+  source.textContent = event.confirmed ? `${event.source || 'BACKEND'} · CONFIRMED` : (event.source || 'BROWSER');
+  head.append(title, source);
+
+  const detail = document.createElement('p');
+  detail.textContent = short(event.detail || '', 320);
+  body.append(head, detail);
+
+  const metaValues = [
+    event.requestId ? `request ${event.requestId}` : '',
+    event.dispatchId ? `dispatch ${event.dispatchId}` : '',
+    Number.isFinite(event.latencyMs) ? `${event.latencyMs} ms` : '',
+    event.backend ? `backend ${event.backend}` : ''
+  ].filter(Boolean);
+  if (metaValues.length) {
+    const meta = document.createElement('div');
+    meta.className = 'event-meta';
+    for (const value of metaValues) {
+      const span = document.createElement('span');
+      span.textContent = value;
+      meta.append(span);
+    }
+    body.append(meta);
+  }
+
+  row.append(time, body);
+  traceEl.prepend(row);
+}
+
+function updateProof(data, response, clientLatencyMs) {
+  const proof = data?.proof || {};
+  const requestId = proof.requestId || response?.headers?.get('x-inneros-request-id') || '';
+  const backend = proof.backend || response?.headers?.get('x-inneros-adapter') || '';
+  const latency = Number.isFinite(proof.latencyMs) ? proof.latencyMs : clientLatencyMs;
+  if (requestId) $('proofRequest').textContent = requestId;
+  if (backend) $('proofBackend').textContent = backend;
+  if (Number.isFinite(latency)) $('proofLatency').textContent = `${latency} ms`;
+  const dispatchId = data?.dispatchId || '';
+  if (dispatchId) $('proofDispatch').textContent = dispatchId;
+  return { requestId, backend, latencyMs: latency };
+}
+
+function renderReturnedTrace(data) {
+  if (!Array.isArray(data?.trace)) return;
+  for (const step of data.trace.slice().reverse()) {
+    addTrace({
+      title: `${step.stage || 'backend'} · ${step.state || 'info'}`,
+      detail: step.detail || step,
+      state: step.state || 'info',
+      source: step.stage === 'dispatch' ? 'A2A' : 'MCP',
+      confirmed: true,
+      dispatchId: data.dispatchId || ''
+    });
+  }
+}
+
+function requestFlowStage(name) {
+  if (name === 'get_execution_trace' || name === 'get_evidence') return 'archEvidence';
+  if (name === 'dispatch_agent_action' || name === 'resolve_project_blocker') return 'archMcp';
+  return 'archWebmcp';
+}
+
+function responseFlowStage(name, data) {
+  if (name === 'get_execution_trace' || name === 'get_evidence') return 'archEvidence';
+  if (name === 'dispatch_agent_action' || name === 'resolve_project_blocker') return data?.dispatchId ? 'archExecutor' : 'archMcp';
+  if (name === 'ask_inneros_copilot') return 'archBridge';
+  return 'archBridge';
+}
+
+async function invoke(name, input = {}, { trace = true } = {}) {
+  const requestStage = requestFlowStage(name);
+  setFlowStage(requestStage);
+
+  if (trace) {
+    addTrace({
+      title: `Tool request · ${name}`,
+      detail: name === 'ask_inneros_copilot' ? { project: input.project, message: short(input.message, 90) } : input,
+      state: 'info',
+      source: 'BROWSER',
+      confirmed: false
+    });
+  }
+
+  const started = performance.now();
+  const response = await fetch(`/api/tools/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+  const clientLatencyMs = Math.round(performance.now() - started);
+  let data;
+  try { data = await response.json(); }
+  catch { data = { ok: false, state: 'error', error: 'invalid_backend_json' }; }
+
+  const proof = updateProof(data, response, clientLatencyMs);
+  setFlowStage(responseFlowStage(name, data), { confirmed: Boolean(data?.ok), degraded: !data?.ok });
+
+  if (trace) {
+    addTrace({
+      title: `${name} · ${data.state || (data.ok ? 'ok' : 'error')}`,
+      detail: data.error || data.blocker || data.message || data.route || 'Backend response received.',
+      state: data.ok ? (data.state || 'ok') : (data.state || 'blocked'),
+      source: 'BACKEND',
+      confirmed: true,
+      requestId: proof.requestId,
+      latencyMs: proof.latencyMs,
+      backend: proof.backend,
+      dispatchId: data.dispatchId || ''
+    });
+  }
+  renderReturnedTrace(data);
+  window.setTimeout(settleFlow, 900);
+  return data;
+}
+
+function bubble(role, label, message) {
+  const article = document.createElement('article');
+  article.className = `bubble ${role}`;
+  const meta = document.createElement('span');
+  meta.className = 'bubble-label';
+  meta.textContent = label;
+  const p = document.createElement('p');
+  p.textContent = message;
+  article.append(meta, p);
+  $('copilotMessages').append(article);
+  $('copilotMessages').scrollTop = $('copilotMessages').scrollHeight;
+  return article;
+}
+
+function mergedLanes(data) {
+  const live = new Map((Array.isArray(data?.agents) ? data.agents : []).map((agent) => [agent.id, agent]));
+  return LANE_DEFAULTS.map((fallback) => ({ ...fallback, ...(live.get(fallback.id) || {}) }));
+}
+
+function laneState(agent, returnedByBackend) {
+  if (!returnedByBackend) return { label: 'DISCOVERING', className: 'unknown' };
+  if (agent.ready === false) return { label: 'DEGRADED', className: 'off' };
+  if (agent.ready === true) return { label: 'AVAILABLE', className: 'ready' };
+  return { label: 'CONFIGURED', className: 'unknown' };
+}
+
+function renderAgents(data) {
+  const backendIds = new Set((Array.isArray(data?.agents) ? data.agents : []).map((agent) => agent.id));
+  const agents = mergedLanes(data);
+  $('agents').replaceChildren(...agents.map((agent) => {
+    const state = laneState(agent, backendIds.has(agent.id));
+    const card = document.createElement('article');
+    card.dataset.agent = agent.id || '';
+    card.classList.add(`lane-${state.className}`);
+
+    const dot = document.createElement('span');
+    dot.className = `dot ${state.className === 'off' ? 'off' : state.className === 'unknown' ? 'unknown' : ''}`;
+
+    const text = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'lane-title';
+    const strong = document.createElement('strong');
+    strong.textContent = agent.label || agent.id || 'Agent';
+    const chip = document.createElement('span');
+    chip.className = `lane-state ${state.className}`;
+    chip.textContent = state.label;
+    header.append(strong, chip);
+
+    const small = document.createElement('small');
+    const parts = [agent.transport, agent.capability, agent.cost, agent.verification].filter(Boolean);
+    small.textContent = parts.join(' · ') || 'Backend-reported capability';
+    text.append(header, small);
+    card.append(dot, text);
+
+    if (agent.id) {
+      card.addEventListener('click', () => {
+        $('executorTarget').value = agent.id;
+        document.querySelectorAll('#agents article').forEach((el) => el.classList.toggle('selected', el === card));
+        setFlowStage('archExecutor');
+        addTrace({ title: `Execution lane selected · ${agent.label}`, detail: `Target set to ${agent.id}. This does not claim execution.`, state: 'info', source: 'BROWSER', confirmed: false });
+        window.setTimeout(settleFlow, 700);
+      });
+    }
+    return card;
+  }));
+  $('fabricState').textContent = data?.live ? 'Live fabric confirmed' : 'Provider discovery partial';
+  if (data?.live) {
+    $('archMcp')?.classList.add('verified');
+    $('archExecutor')?.classList.add('verified');
+  }
+}
+
+function renderMission(data, target = 'auto') {
+  $('missionSummary').hidden = false;
+  const route = data?.route || {};
+  const resource = route.provider || route.providerId || data?.agent || (target === 'auto' ? 'InnerOS router' : target) || 'Pending';
+  $('selectedResource').textContent = resource;
+  const model = [route.model, route.runtime].filter(Boolean).join(' · ');
+  $('selectedModel').textContent = model || (resource === 'local' || target === 'local' ? 'Qwen3-Coder / A2A' : 'Provider runtime');
+  $('missionState').textContent = data?.state || 'unknown';
+  $('evidenceState').textContent = ['completed', 'pass'].includes(String(data?.state).toLowerCase()) ? 'Verified' : 'Pending verification';
+  lastDispatchId = data?.dispatchId || '';
+  $('dispatchId').textContent = lastDispatchId || 'No dispatch returned';
+  $('proofDispatch').textContent = lastDispatchId || 'None';
+  $('refreshEvidence').hidden = !lastDispatchId;
+  resultEl.textContent = JSON.stringify(data, null, 2);
+  if (lastDispatchId) {
+    setFlowStage('archExecutor', { confirmed: true });
+    startEvidencePolling();
+  }
+}
+
+function terminalState(value = '') {
+  return ['completed', 'pass', 'failed', 'error', 'rejected', 'cancelled'].includes(String(value).toLowerCase());
+}
+
+async function refreshEvidence({ silent = false } = {}) {
+  if (!lastDispatchId || evidenceBusy) return '';
+  evidenceBusy = true;
+  try {
+    setFlowStage('archEvidence');
+    const trace = await invoke('get_execution_trace', { dispatchId: lastDispatchId }, { trace: !silent });
+    const evidence = await invoke('get_evidence', { dispatchId: lastDispatchId }, { trace: !silent });
+    const state = evidence?.state || trace?.state || 'unknown';
+    $('missionState').textContent = state;
+    $('evidenceState').textContent = terminalState(state) && !['failed', 'error', 'rejected', 'cancelled'].includes(String(state).toLowerCase()) ? 'Verified' : state;
+    resultEl.textContent = JSON.stringify({ trace, evidence }, null, 2);
+    if (Array.isArray(trace?.trace)) renderReturnedTrace(trace);
+    if (terminalState(state)) {
+      setFlowStage('archEvidence', { confirmed: ['completed', 'pass'].includes(String(state).toLowerCase()), degraded: ['failed', 'error', 'rejected', 'cancelled'].includes(String(state).toLowerCase()) });
+      addTrace({
+        title: `Evidence state · ${state}`,
+        detail: evidence?.evidence || 'Backend evidence endpoint returned terminal state.',
+        state,
+        source: 'EVIDENCE',
+        confirmed: true,
+        dispatchId: lastDispatchId,
+        requestId: evidence?.proof?.requestId || ''
+      });
+    }
+    return state;
+  } finally {
+    evidenceBusy = false;
+  }
+}
+
+function startEvidencePolling() {
+  if (evidenceTimer) clearInterval(evidenceTimer);
+  let attempts = 0;
+  evidenceTimer = setInterval(async () => {
+    attempts += 1;
+    const state = await refreshEvidence({ silent: true });
+    if (terminalState(state) || attempts >= 12) {
+      clearInterval(evidenceTimer);
+      evidenceTimer = null;
+    }
+  }, 2500);
+}
+
+async function askCopilot(event) {
+  event.preventDefault();
+  const prompt = $('copilotPrompt').value.trim();
+  if (!prompt) return;
+  const project = $('project').value.trim() || 'inneros-webmcp';
+  lastCopilotPrompt = prompt;
+  lastExecutionBrief = '';
+  $('executePlan').disabled = true;
+  bubble('user', 'YOU', prompt);
+  $('copilotPrompt').value = '';
+  $('askCopilot').disabled = true;
+  $('askCopilot').textContent = 'Local model thinking…';
+  setFlowStage('archHuman', { confirmed: true });
+  window.setTimeout(() => setFlowStage('archWebmcp'), 120);
+
+  try {
+    const data = await invoke('ask_inneros_copilot', { project, message: prompt });
+    if (data.ok) {
+      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'}`, data.message);
+      lastExecutionBrief = data.executionBrief || prompt;
+      $('executePlan').disabled = false;
+      $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
+      $('copilotBadge').textContent = 'Local Qwen3-Coder · response confirmed';
+      $('copilotBadge').classList.add('ok');
+      $('modelPill').classList.remove('degraded');
+    } else {
+      bubble('error', 'COPILOT ERROR', data.error || 'Local model unavailable.');
+      $('copilotBadge').textContent = 'Local Qwen3-Coder · unavailable';
+      $('copilotBadge').classList.remove('ok');
+      $('modelPill').classList.add('degraded');
+    }
+  } catch (error) {
+    bubble('error', 'COPILOT ERROR', error.message || 'Request failed.');
+    $('copilotBadge').textContent = 'Local Qwen3-Coder · request failed';
+    $('copilotBadge').classList.remove('ok');
+    $('modelPill').classList.add('degraded');
+    addTrace({ title: 'Copilot request failed', detail: error.message, state: 'error', source: 'BROWSER' });
+  } finally {
+    $('askCopilot').disabled = false;
+    $('askCopilot').textContent = 'Ask local model';
+  }
+}
+
+async function executePlan() {
+  const project = $('project').value.trim() || 'inneros-webmcp';
+  const target = $('executorTarget').value;
+  const instruction = (lastExecutionBrief || lastCopilotPrompt || '').slice(0, 2000);
+  if (!instruction) return;
+  $('executePlan').disabled = true;
+  $('executePlan').textContent = 'Dispatching…';
+  setFlowStage('archMcp');
+  try {
+    const data = target === 'auto'
+      ? await invoke('resolve_project_blocker', { project, policy: 'local_first', instruction })
+      : await invoke('dispatch_agent_action', { agent: target, project, instruction });
+    renderMission(data, target);
+    if (data?.dispatchId) {
+      bubble('assistant', 'INNEROS ROUTER', `Task accepted by ${data?.route?.provider || data?.agent || target}. Dispatch ID: ${data.dispatchId}. Delivery is not completion; the trace now follows backend evidence until the task reaches a terminal state.`);
+    } else if (!data?.ok) {
+      bubble('error', 'INNEROS ROUTER', data?.error || data?.blocker || 'The selected lane could not accept the task.');
+    }
+  } finally {
+    $('executePlan').disabled = false;
+    $('executePlan').textContent = 'Execute proposed plan';
+  }
+}
+
+async function boot() {
+  try {
+    const started = performance.now();
+    const healthResponse = await fetch('/api/health');
+    const health = await healthResponse.json();
+    const healthMs = Math.round(performance.now() - started);
+    $('health').textContent = health.ok ? 'Bridge: online' : 'Bridge: unavailable';
+    $('adapterState').textContent = health.adapter?.mode === 'mcp_loopback' ? 'MCP loopback · live' : (health.adapter?.mode || 'Unavailable');
+    $('adapterDetail').textContent = health.adapter?.configured ? 'Private backend connected' : 'Adapter not connected';
+    $('toolCount').textContent = `${health.webmcpTools || 0} WebMCP`;
+    $('copilotBadge').textContent = health.copilot?.configured ? 'Local Qwen3-Coder · configured · verify on Ask' : 'Local copilot not configured';
+    $('copilotBadge').classList.toggle('ok', false);
+    if (health.copilot?.model) $('modelLabel').textContent = `${health.copilot.provider || 'Local AMD'} · ${health.copilot.runtime || 'vLLM'} · configured`;
+
+    const cfRay = healthResponse.headers.get('cf-ray');
+    const serverHeader = healthResponse.headers.get('server') || '';
+    const cloudflareDetected = Boolean(cfRay) || /cloudflare/i.test(serverHeader);
+    $('edgeState').textContent = cloudflareDetected ? 'Cloudflare · live' : 'Direct / local';
+    $('edgeDetail').textContent = cloudflareDetected ? `Edge confirmed${cfRay ? ` · ray ${cfRay.split('-')[0]}` : ''}` : 'No Cloudflare header detected';
+    addTrace({
+      title: cloudflareDetected ? 'Cloudflare edge handshake' : 'Direct origin detected',
+      detail: cloudflareDetected ? `Public request reached Cloudflare and returned from InnerOS in ${healthMs} ms.` : 'Health response did not include a Cloudflare edge marker.',
+      state: health.ok ? 'ok' : 'blocked',
+      source: 'EDGE',
+      confirmed: cloudflareDetected,
+      requestId: cfRay ? cfRay.split('-')[0] : '',
+      latencyMs: healthMs,
+      backend: health.adapter?.mode || ''
+    });
+    if (health.adapter?.configured) {
+      $('archBridge')?.classList.add('verified');
+      addTrace({ title: 'Private bridge health', detail: `Adapter mode: ${health.adapter.mode}. Private backend is configured without exposing its endpoint.`, state: 'ok', source: 'BACKEND', confirmed: true, backend: health.adapter.mode });
+    }
+
+    const policy = await fetch('/api/policy').then((r) => r.json());
+    const agents = await invoke('list_agents', {});
+    renderAgents(agents?.agents ? agents : { agents: policy.agents || [], live: false });
+
+    const registration = installBrowserWebMCP(invoke);
+    if (registration.supported) {
+      $('mcpBadge').textContent = `ChatGPT WebMCP · ${registration.registered.length} Site Tools live`;
+      $('mcpBadge').classList.add('ok');
+      $('archWebmcp')?.classList.add('verified');
+    } else {
+      $('mcpBadge').textContent = 'Standard browser · Site Tools activate inside ChatGPT';
+      $('mcpBadge').classList.remove('ok');
+    }
+    addTrace({
+      title: registration.supported ? 'Browser registered WebMCP Site Tools' : 'Standard-browser compatibility mode',
+      detail: registration.supported
+        ? `${registration.registered.length} tools registered through document.modelContext.registerTool.`
+        : 'This browser does not expose document.modelContext. Nothing is broken: open this same URL in ChatGPT’s integrated browser to use the 8 Site Tools.',
+      state: registration.supported ? 'ok' : 'info',
+      source: 'BROWSER',
+      confirmed: false
+    });
+    setFlowStage('archHuman', { confirmed: true });
+    window.setTimeout(settleFlow, 900);
+  } catch (error) {
+    $('health').textContent = 'Bridge: unavailable';
+    $('adapterState').textContent = 'Unavailable';
+    addTrace({ title: 'Boot failed', detail: error.message, state: 'blocked', source: 'BROWSER' });
+  }
+}
+
+$('copilotForm').addEventListener('submit', askCopilot);
+$('executePlan').addEventListener('click', executePlan);
+$('refreshEvidence').addEventListener('click', () => refreshEvidence({ silent: false }));
+$('clearTrace').addEventListener('click', () => {
+  traceEl.replaceChildren();
+  const empty = document.createElement('div');
+  empty.className = 'empty';
+  empty.textContent = 'Waiting for live events.';
+  traceEl.append(empty);
+});
+
+boot();
