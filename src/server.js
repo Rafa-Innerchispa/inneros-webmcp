@@ -58,6 +58,7 @@ function proofFor(tool, result, requestId, latencyMs) {
 const staticFiles = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
   ['/login.html',['login.html','text/html; charset=utf-8']],
+  ['/login.js',['login.js','text/javascript; charset=utf-8']],
   ['/app.js',['app.js','text/javascript; charset=utf-8']],
   ['/webmcp.js',['../src/webmcp.js','text/javascript; charset=utf-8']],
   ['/styles.css',['styles.css','text/css; charset=utf-8']]
@@ -129,7 +130,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && staticFiles.has(url.pathname)) {
       const status = authStatus();
       const isLogin = url.pathname === '/login.html';
-      if (status.required && !auth.ok && !isLogin && url.pathname !== '/styles.css') {
+      if (status.required && !auth.ok && !isLogin && url.pathname !== '/styles.css' && url.pathname !== '/login.js') {
         res.writeHead(302, { location: '/login.html', 'cache-control': 'no-store' });
         return res.end();
       }
