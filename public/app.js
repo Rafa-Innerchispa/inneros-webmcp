@@ -647,3 +647,52 @@ $('copilotPrompt')?.addEventListener('keydown', (event) => {
 const chatObserver = new MutationObserver(scrollChatToLatest);
 if ($('copilotMessages')) chatObserver.observe($('copilotMessages'), { childList: true });
 restoreChatHistory();
+
+
+// Hot scene discovery: keep the physical-control selector synced with AG-59
+// without adding noisy periodic rows to Global Live Trace. A trace row is added
+// only when the trusted backend registry actually changes.
+let dmxRegistryFingerprint = '';
+let dmxRegistryPollTimer = null;
+
+async function pollDmxRegistry() {
+  try {
+    const response = await fetch('/api/tools/dmx_status', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}'
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data?.ok || !Array.isArray(data.supportedScenes)) return;
+
+    const scenes = data.supportedScenes.filter(Boolean);
+    const fingerprint = scenes.join('|');
+    if (!fingerprint) return;
+    const changed = Boolean(dmxRegistryFingerprint) && fingerprint !== dmxRegistryFingerprint;
+    dmxRegistryFingerprint = fingerprint;
+    await refreshDmxSceneSelector(scenes);
+
+    if (changed) {
+      addTrace({
+        title: 'AG-59 scene registry changed',
+        detail: `Trusted backend now reports ${scenes.length} scenes: ${scenes.join(', ')}`,
+        state: 'ready',
+        source: 'BACKEND',
+        confirmed: true,
+        requestId: data?.proof?.requestId || '',
+        backend: data?.proof?.backend || 'mcp_loopback'
+      });
+    }
+  } catch {
+    // Discovery is best-effort; explicit DMX Status remains available.
+  }
+}
+
+function startDmxRegistryPolling() {
+  if (dmxRegistryPollTimer) clearInterval(dmxRegistryPollTimer);
+  pollDmxRegistry();
+  dmxRegistryPollTimer = setInterval(pollDmxRegistry, 4000);
+}
+
+window.setTimeout(startDmxRegistryPolling, 1200);

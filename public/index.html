@@ -8,15 +8,15 @@
 </head>
 <body>
   <div class="network-bg" aria-hidden="true"><span></span><span></span></div>
-  <main class="page">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">INNEROS · WEBMCP · LIVE CODING CONTROL PLANE</p>
-        <h1>Ask once. Route anywhere. Prove every execution.</h1>
-        <p class="hero-sub">One browser interface for a local Qwen3-Coder model on AMD/vLLM, 11 WebMCP Site Tools (including AG-59 DMX), InnerOS orchestration, MCP/A2A routing and verifiable execution. Delivery and execution stay separate: Cursor and AntiGravity use remote inbox unless live proof says otherwise.</p>
+  <main class="page recording-page">
+    <section class="hero recording-hero">
+      <div class="hero-copy recording-hero-copy">
+        <p class="eyebrow">INNEROS · WEBMCP · LIVE AGENT CONTROL PLANE</p>
+        <h1>Ask. Execute. Watch the proof.</h1>
+        <p class="hero-sub">Local Qwen3-Coder, 11 WebMCP Site Tools, MCP/A2A execution, real provider lanes and AG-59 physical DMX control. Browser events and backend-confirmed evidence stay visibly separate.</p>
       </div>
 
-      <section class="architecture flow-rail" id="flowRail" aria-label="Live execution flow">
+      <section class="architecture flow-rail recording-flow" id="flowRail" aria-label="Live execution flow">
         <div class="arch-node verified" id="archHuman" data-stage="human"><small>YOU</small><strong>Prompt</strong><em>Input</em></div>
         <span class="arch-link"><i></i>→</span>
         <div class="arch-node" id="archWebmcp" data-stage="webmcp"><small>WEBMCP</small><strong>Site Tools</strong><em>Browser API</em></div>
@@ -30,143 +30,142 @@
         <div class="arch-node" id="archEvidence" data-stage="evidence"><small>EVIDENCE</small><strong>Trace + proof</strong><em>Verify</em></div>
       </section>
 
-      <section class="panel copilot-panel unified-chat-panel" aria-label="InnerOS coding chat">
-        <header class="panel-header chat-panel-header">
-          <div>
-            <p class="eyebrow">LIVE CODING CHAT</p>
-            <h2>InnerOS Copilot</h2>
-            <p>Talk to the local Qwen3-Coder model, then dispatch the proposed work to Auto, Local AMD, Codex, Cursor or AntiGravity. The conversation stays in one continuous panel and execution remains separately verifiable.</p>
-          </div>
-          <div class="chat-header-actions">
-            <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
-            <button id="logoutBtn" class="ghost compact-button" type="button" hidden>Log out</button>
-          </div>
-        </header>
-
-        <div class="chat-context-row">
-          <label>Project
-            <input id="project" value="inneros-webmcp" maxlength="120">
-          </label>
-          <label>Execution target
-            <select id="executorTarget">
-              <option value="auto">Auto · InnerOS policy</option>
-              <option value="local">Local AMD · A2A</option>
-              <option value="codex">Codex</option>
-              <option value="cursor">Cursor · ACP</option>
-              <option value="antigravity">AntiGravity</option>
-            </select>
-          </label>
+      <div class="recording-status-row">
+        <div class="hero-badges recording-badges">
+          <span id="mcpBadge" class="badge">Checking browser mode…</span>
+          <span id="copilotBadge" class="badge">Checking local model…</span>
         </div>
-
-        <div id="copilotMessages" class="chat unified-chat" aria-live="polite">
-          <article class="bubble assistant">
-            <span class="bubble-label">INNEROS COPILOT</span>
-            <p>Describe what you want to build or fix. I will answer here, in this same conversation, and prepare an execution brief. Then choose who executes it.</p>
-          </article>
-        </div>
-
-        <form id="copilotForm" class="chat-composer">
-          <label class="composer-label">Message InnerOS
-            <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Inspect the project and propose a small safe improvement with a regression test."></textarea>
-          </label>
-          <div class="composer-footer">
-            <div class="history-controls">
-              <span id="historyState">Chat history is saved in this browser.</span>
-              <button id="clearChat" class="ghost compact-button" type="button">Clear history</button>
-            </div>
-            <div class="action-row">
-              <button id="askCopilot" type="submit">Ask local model</button>
-              <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
-            </div>
-          </div>
-        </form>
-      </section>
-
-      <div class="hero-badges">
-        <span id="mcpBadge" class="badge">Checking browser mode…</span>
-        <span id="copilotBadge" class="badge">Checking local model…</span>
-      </div>
-
-      <section class="status-strip" aria-label="System status">
-        <article><span>EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Checking public delivery</small></article>
-        <article><span>ORIGIN</span><strong>Local / private</strong><small>InnerOS remains on-prem</small></article>
-        <article><span>BRIDGE</span><strong id="adapterState">Checking…</strong><small id="adapterDetail">Public-safe adapter</small></article>
-        <article><span>TOOLS</span><strong id="toolCount">11 WebMCP</strong><small>Structured agent surface</small></article>
-      </section>
-    </section>
-
-    <section class="console-grid">
-      <div class="workspace">
-        <section class="panel lanes-panel">
-          <div class="section-heading">
-            <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Four lanes, one control surface</h2></div>
-            <span id="fabricState" class="muted">Loading live fabric…</span>
-          </div>
-          <div class="cards" id="agents"></div>
-          <p class="lane-note">Availability, delivery and execution are different states. A lane can accept a task without claiming that a process is already running.</p>
-        </section>
-
-        <section class="panel dmx-panel">
-          <div class="section-heading">
-            <div><p class="eyebrow">PHYSICAL WORLD · AG-59</p><h2>DMX stage orchestrator</h2></div>
-            <span id="dmxState" class="muted">Checking DMX bridge…</span>
-          </div>
-          <p class="lane-note">Safe allowlisted scenes only. Routes through AntiGravity-built inneros-dmx-engine (9 fixtures on Pknight CR011R). No raw channel writes from the public page.</p>
-          <div class="dmx-actions">
-            <button id="dmxStatusBtn" class="secondary" type="button">DMX status</button>
-            <select id="dmxScene">
-              <option value="rainbow">Rainbow</option>
-              <option value="frenzy">Frenzy</option>
-              <option value="morado_uv">Morado UV</option>
-              <option value="rojo_sangre">Rojo sangre</option>
-              <option value="chill_lounge">Chill lounge</option>
-              <option value="blackout">Blackout</option>
-            </select>
-            <button id="dmxSceneBtn" type="button">Apply scene</button>
-            <button id="dmxBlackoutBtn" class="secondary" type="button">Blackout now</button>
-          </div>
-        </section>
-
-        <section id="missionSummary" class="panel mission-panel" hidden>
-          <div class="section-heading"><div><p class="eyebrow">CURRENT EXECUTION</p><h2>Backend-confirmed mission</h2></div><span id="missionState" class="state-pill">Pending</span></div>
-          <div class="mission-summary">
-            <div><span>SELECTED RESOURCE</span><strong id="selectedResource">Pending</strong></div>
-            <div><span>MODEL / RUNTIME</span><strong id="selectedModel">Pending</strong></div>
-            <div><span>DISPATCH ID</span><strong id="dispatchId">Pending</strong></div>
-            <div><span>EVIDENCE</span><strong id="evidenceState">Pending</strong></div>
-          </div>
-          <button id="refreshEvidence" class="secondary wide" type="button" hidden>Refresh trace & evidence</button>
-          <details class="payload">
-            <summary>View sanitized backend payload</summary>
-            <pre id="result">No backend payload yet.</pre>
-          </details>
+        <section class="status-strip recording-status" aria-label="System status">
+          <article><span>EDGE</span><strong id="edgeState">Detecting…</strong><small id="edgeDetail">Public delivery</small></article>
+          <article><span>BRIDGE</span><strong id="adapterState">Checking…</strong><small id="adapterDetail">Public-safe adapter</small></article>
+          <article><span>TOOLS</span><strong id="toolCount">11 WebMCP</strong><small>Agent surface</small></article>
+          <article><span>ORIGIN</span><strong>Local / private</strong><small>On-prem fabric</small></article>
         </section>
       </div>
 
-      <aside class="panel trace-panel">
-        <header class="trace-header">
-          <div>
-            <p class="eyebrow">PROOF, NOT THEATER</p>
-            <h2>Global Live Trace</h2>
-            <p>Watch browser intent become a WebMCP call, a backend handshake, a durable dispatch and finally evidence. Browser-only events are visibly separated from backend-confirmed events.</p>
-          </div>
-          <button id="clearTrace" class="ghost" type="button">Clear</button>
-        </header>
+      <section class="recording-grid" aria-label="Mission Control recording cockpit">
+        <div class="operator-column">
+          <section class="panel dmx-panel recording-dmx">
+            <div class="section-heading compact-heading">
+              <div><p class="eyebrow">PHYSICAL WORLD · AG-59</p><h2>DMX quick control</h2></div>
+              <span id="dmxState" class="muted">Checking DMX bridge…</span>
+            </div>
+            <div class="dmx-actions recording-dmx-actions">
+              <button id="dmxStatusBtn" class="secondary" type="button">Refresh scenes</button>
+              <select id="dmxScene" aria-label="Available DMX scenes">
+                <option value="rainbow">Rainbow</option>
+                <option value="frenzy">Frenzy</option>
+                <option value="morado_uv">Morado UV</option>
+                <option value="rojo_sangre">Rojo sangre</option>
+                <option value="chill_lounge">Chill lounge</option>
+              </select>
+              <button id="dmxSceneBtn" type="button">Apply scene</button>
+              <button id="dmxBlackoutBtn" class="secondary" type="button">Blackout</button>
+            </div>
+            <p class="lane-note recording-dmx-note">Scene names come from the trusted AG-59 registry. Newly registered validated scenes appear here after refresh; raw DMX channels are never exposed.</p>
+          </section>
 
-        <section class="proof-strip">
-          <div><span>LATEST REQUEST</span><strong id="proofRequest">None</strong></div>
-          <div><span>BACKEND</span><strong id="proofBackend">Waiting</strong></div>
-          <div><span>LATENCY</span><strong id="proofLatency">—</strong></div>
-          <div><span>DISPATCH</span><strong id="proofDispatch">None</strong></div>
-        </section>
+          <section class="panel lanes-panel recording-lanes">
+            <div class="section-heading compact-heading">
+              <div><p class="eyebrow">EXECUTION FABRIC</p><h2>Four lanes · one control surface</h2></div>
+              <span id="fabricState" class="muted">Loading live fabric…</span>
+            </div>
+            <div class="cards recording-cards" id="agents"></div>
+          </section>
 
-        <div id="trace" class="trace"><div class="empty">Waiting for live events.</div></div>
+          <section class="panel copilot-panel unified-chat-panel recording-chat" aria-label="InnerOS coding chat">
+            <header class="panel-header chat-panel-header recording-chat-header">
+              <div>
+                <p class="eyebrow">LIVE CODING CHAT</p>
+                <h2>InnerOS Copilot</h2>
+                <p>Ask the local model, choose an execution lane, then follow backend evidence on the right.</p>
+              </div>
+              <div class="chat-header-actions">
+                <div class="model-pill" id="modelPill"><span class="live-dot"></span><span id="modelLabel">Local AMD · checking</span></div>
+                <button id="logoutBtn" class="ghost compact-button" type="button" hidden>Log out</button>
+              </div>
+            </header>
 
-        <footer>
-          <span>PUBLIC EDGE → PRIVATE AI FABRIC → VERIFIED EVIDENCE</span>
-          <span id="health">Bridge: checking…</span>
-        </footer>
-      </aside>
+            <div class="chat-context-row recording-context-row">
+              <label>Project
+                <input id="project" value="inneros-webmcp" maxlength="120">
+              </label>
+              <label>Execution target
+                <select id="executorTarget">
+                  <option value="auto">Auto · InnerOS policy</option>
+                  <option value="local">Local AMD · A2A</option>
+                  <option value="codex">Codex</option>
+                  <option value="cursor">Cursor · remote inbox</option>
+                  <option value="antigravity">AntiGravity · remote inbox</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="copilotMessages" class="chat unified-chat recording-chat-window" aria-live="polite">
+              <article class="bubble assistant">
+                <span class="bubble-label">INNEROS COPILOT</span>
+                <p>Describe what you want to build or change. I will prepare an execution brief; choose who executes it and watch the verified trace beside this chat.</p>
+              </article>
+            </div>
+
+            <form id="copilotForm" class="chat-composer recording-composer">
+              <label class="composer-label">Message InnerOS
+                <textarea id="copilotPrompt" maxlength="4000" placeholder="Example: Create a new safe DMX scene called Aurora Pulse and register it so it appears in Mission Control."></textarea>
+              </label>
+              <div class="composer-footer">
+                <div class="history-controls">
+                  <span id="historyState">Chat history is saved in this browser.</span>
+                  <button id="clearChat" class="ghost compact-button" type="button">Clear</button>
+                </div>
+                <div class="action-row">
+                  <button id="askCopilot" type="submit">Ask local model</button>
+                  <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section id="missionSummary" class="panel mission-panel recording-mission" hidden>
+            <div class="section-heading compact-heading"><div><p class="eyebrow">CURRENT EXECUTION</p><h2>Backend-confirmed mission</h2></div><span id="missionState" class="state-pill">Pending</span></div>
+            <div class="mission-summary">
+              <div><span>RESOURCE</span><strong id="selectedResource">Pending</strong></div>
+              <div><span>MODEL / RUNTIME</span><strong id="selectedModel">Pending</strong></div>
+              <div><span>DISPATCH</span><strong id="dispatchId">Pending</strong></div>
+              <div><span>EVIDENCE</span><strong id="evidenceState">Pending</strong></div>
+            </div>
+            <button id="refreshEvidence" class="secondary wide" type="button" hidden>Refresh trace & evidence</button>
+            <details class="payload">
+              <summary>Sanitized backend payload</summary>
+              <pre id="result">No backend payload yet.</pre>
+            </details>
+          </section>
+        </div>
+
+        <aside class="panel trace-panel recording-trace">
+          <header class="trace-header recording-trace-header">
+            <div>
+              <p class="eyebrow">PROOF, NOT THEATER</p>
+              <h2>Global Live Trace</h2>
+              <p>Browser intent, WebMCP calls, durable dispatches and backend evidence. Only backend-returned events receive the CONFIRMED label.</p>
+            </div>
+            <button id="clearTrace" class="ghost" type="button">Clear</button>
+          </header>
+
+          <section class="proof-strip recording-proof-strip">
+            <div><span>LATEST REQUEST</span><strong id="proofRequest">None</strong></div>
+            <div><span>BACKEND</span><strong id="proofBackend">Waiting</strong></div>
+            <div><span>LATENCY</span><strong id="proofLatency">—</strong></div>
+            <div><span>DISPATCH</span><strong id="proofDispatch">None</strong></div>
+          </section>
+
+          <div id="trace" class="trace recording-trace-stream"><div class="empty">Waiting for live events.</div></div>
+
+          <footer>
+            <span>PUBLIC EDGE → PRIVATE AI FABRIC → VERIFIED EVIDENCE</span>
+            <span id="health">Bridge: checking…</span>
+          </footer>
+        </aside>
+      </section>
     </section>
   </main>
   <script type="module" src="/app.js"></script>
