@@ -91,18 +91,19 @@
             <span id="dmxState" class="muted">Checking DMX bridge…</span>
           </div>
           <div class="dmx-actions recording-dmx-actions">
-            <button id="dmxStatusBtn" class="secondary" type="button">Refresh</button>
-            <select id="dmxScene" aria-label="Available DMX scenes">
-              <option value="rainbow">Rainbow</option>
-              <option value="frenzy">Frenzy</option>
-              <option value="morado_uv">Morado UV</option>
-              <option value="rojo_sangre">Rojo sangre</option>
-              <option value="chill_lounge">Chill lounge</option>
-            </select>
+            <button id="dmxStatusBtn" class="secondary" type="button">Refresh registry</button>
+            <select id="dmxScene" aria-label="Available DMX scenes"><option value="rainbow">Rainbow</option></select>
             <button id="dmxSceneBtn" type="button">Apply scene</button>
+            <button id="dmxCreateApplyBtn" type="button">Create + Apply</button>
             <button id="dmxBlackoutBtn" class="secondary danger-soft" type="button">Blackout</button>
           </div>
-          <p class="lane-note recording-dmx-note">Trusted AG-59 registry only. New validated scenes appear automatically; registration never equals physical execution.</p>
+          <div id="dmxScenePreview" class="dmx-preview" hidden aria-live="polite"></div>
+          <div id="dmxSceneGallery" class="dmx-gallery" aria-label="Scene gallery"></div>
+          <div class="dmx-demo-controls">
+            <label><input id="dmxDemoAutoBlackout" type="checkbox"> Demo auto-blackout</label>
+            <label>after <input id="dmxDemoAutoBlackoutSeconds" type="number" min="5" max="120" value="12"> sec</label>
+          </div>
+          <p class="lane-note recording-dmx-note">Design in chat (AUTO) or Create + Apply. Registry updates live; physical execution is always explicit.</p>
         </section>
       </section>
 
@@ -154,6 +155,7 @@
                   <button id="clearChat" class="ghost compact-button" type="button">Clear</button>
                 </div>
                 <div class="action-row">
+                  <button id="voiceMicBtn" class="secondary" type="button" title="Voice input (browser speech)">🎤 Voice</button>
                   <button id="askCopilot" type="submit">Ask local model</button>
                   <button id="executePlan" class="secondary" type="button" disabled>Execute proposed plan</button>
                 </div>

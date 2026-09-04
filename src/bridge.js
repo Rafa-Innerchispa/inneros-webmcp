@@ -186,6 +186,8 @@ export async function invokeTool(name, input = {}) {
       ...registered,
       designer: { provider: designed.provider, runtime: designed.runtime, model: designed.model },
       designedScene: normalizedScene,
+      steps: normalizedScene.steps,
+      loops: normalizedScene.loops,
       executionClaimed: true,
       physicalExecutionClaimed: false
     };

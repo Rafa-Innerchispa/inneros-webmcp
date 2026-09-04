@@ -1,3 +1,5 @@
+import { buildSceneCatalog, formatSceneLabel } from './scene-catalog.js';
+
 const DEFAULT_TIMEOUT_MS = Number(process.env.INNEROS_DMX_TIMEOUT_MS || 8000);
 
 export const DEFAULT_DMX_SCENES = Object.freeze([
@@ -40,6 +42,12 @@ export function extractSupportedScenes(live = {}, fallback = DEFAULT_DMX_SCENES)
   const unique = [...new Set(scenes)];
   if (!unique.includes('blackout')) unique.push('blackout');
   return Object.freeze(unique);
+}
+
+export function extractDynamicScenes(live = {}) {
+  const raw = live.dynamic_scenes ?? live.dynamicScenes ?? {};
+  if (!raw || typeof raw !== 'object') return {};
+  return sanitizePublic(raw);
 }
 
 export function resolveDmxApiUrl(env = process.env) {
@@ -114,6 +122,8 @@ export async function getDmxStatus(options = {}) {
   const live = await dmxFetch('/api/status', {}, env, fetchImpl);
   if (!live.ok) return live;
   const supportedScenes = extractSupportedScenes(live);
+  const dynamicScenes = extractDynamicScenes(live);
+  const sceneCatalog = buildSceneCatalog(supportedScenes, dynamicScenes);
   return {
     ok: true,
     state: 'ready',
@@ -122,6 +132,8 @@ export async function getDmxStatus(options = {}) {
     engine: 'inneros-dmx-engine',
     fixtureCount: Number(live.fixture_count ?? live.fixtureCount) || 9,
     supportedScenes,
+    dynamicScenes,
+    sceneCatalog,
     currentEffect: live.current_effect || live.currentEffect || null,
     running: Boolean(live.running),
     executionClaimed: false
@@ -151,7 +163,7 @@ export async function setDmxScene(input = {}, options = {}) {
       body: JSON.stringify({ color: alias.color, target: alias.target, brightness: 255 })
     }, env, fetchImpl);
     return result.ok
-      ? { ok: true, state: 'applied', scene, action: 'color', color: alias.color, target: alias.target, agent: DMX_AGENT_ID, executionClaimed: true }
+      ? { ok: true, state: 'applied', scene, label: formatSceneLabel(scene), action: 'color', color: alias.color, target: alias.target, agent: DMX_AGENT_ID, executionClaimed: true }
       : result;
   }
 
@@ -161,7 +173,7 @@ export async function setDmxScene(input = {}, options = {}) {
     body: JSON.stringify({ mode: scene, speed: Number(input.speed) || 1.0 })
   }, env, fetchImpl);
   return result.ok
-    ? { ok: true, state: 'applied', scene, action: 'effect', agent: DMX_AGENT_ID, executionClaimed: true }
+    ? { ok: true, state: 'applied', scene, label: formatSceneLabel(scene), action: 'effect', agent: DMX_AGENT_ID, executionClaimed: true }
     : result;
 }
 
@@ -173,7 +185,6 @@ export async function runDmxBlackout(options = {}) {
     ? { ok: true, state: 'applied', action: 'blackout', agent: DMX_AGENT_ID, executionClaimed: true }
     : result;
 }
-
 
 export async function createDmxScene(input = {}, options = {}) {
   const env = options.env || process.env;
@@ -192,13 +203,18 @@ export async function createDmxScene(input = {}, options = {}) {
   }, env, fetchImpl);
   if (!result.ok) return result;
   const supportedScenes = extractSupportedScenes(result);
+  const dynamicScenes = extractDynamicScenes(result);
+  const sceneCatalog = buildSceneCatalog(supportedScenes, dynamicScenes);
   return {
     ok: true,
     state: 'registered',
     scene: name,
     label,
+    loops,
+    steps,
     supportedScenes,
-    dynamicScenes: result.dynamic_scenes || {},
+    dynamicScenes,
+    sceneCatalog,
     agent: DMX_AGENT_ID,
     action: 'scene_registered',
     executionClaimed: true,
