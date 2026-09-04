@@ -567,3 +567,38 @@ body::before{
   .composer-secondary-row{align-items:flex-end}
   .approval-button{max-width:52%;white-space:normal}
 }
+
+/* DMX gallery, preview timeline, voice mic, create+apply */
+.dmx-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px}
+.dmx-gallery-empty{margin:0;color:var(--muted,#9aa0b5);font-size:.72rem}
+.dmx-gallery-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px;border:1px solid rgba(111,91,255,.28);border-radius:12px;background:rgba(16,18,34,.72);color:#eceaf8;cursor:pointer;text-align:left}
+.dmx-gallery-card.dynamic{border-color:rgba(73,217,255,.42);background:linear-gradient(180deg,rgba(73,217,255,.08),rgba(16,18,34,.78))}
+.dmx-gallery-card strong{font-size:.78rem}
+.dmx-gallery-card span{font-size:.62rem;color:#a8afc6;text-transform:uppercase;letter-spacing:.04em}
+.dmx-preview{margin-top:10px;padding:10px 12px;border:1px dashed rgba(73,217,255,.35);border-radius:12px;background:rgba(8,12,24,.55)}
+.dmx-preview-steps{margin:8px 0 0;padding-left:18px;font-size:.72rem;color:#d7dcf0}
+.dmx-preview-note{margin:8px 0 0;font-size:.64rem;color:#98a0ba}
+.dmx-demo-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px;font-size:.68rem;color:#aeb5cb}
+.dmx-demo-controls label{display:flex;gap:6px;align-items:center}
+.dmx-demo-controls input[type="number"]{width:56px;padding:4px 6px;border-radius:8px;border:1px solid rgba(111,91,255,.28);background:rgba(10,12,22,.8);color:#fff}
+.dmx-actions-extra{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+#createApplyBtn,#dmxCreateApplyBtn{background:linear-gradient(90deg,rgba(111,91,255,.95),rgba(73,217,255,.85));color:#081018;border:none}
+#voiceMicBtn.active{box-shadow:0 0 18px rgba(73,217,255,.35);border-color:rgba(73,217,255,.65)}
+
+
+/* Recording-final stop control */
+.composer-stop-button{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:40px;padding:8px 12px;border-radius:999px;
+  border:1px solid rgba(226,126,105,.45);
+  background:rgba(55,22,20,.92);color:#ffd7cc;font-weight:800;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.composer-stop-button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.composer-stop-button:hover:not(:disabled){border-color:rgba(244,154,133,.8);background:rgba(78,30,26,.96)}
+.composer-stop-button[hidden]{display:none!important}
+.composer-send-button[hidden]{display:none!important}
+.composer-icon-button.active{box-shadow:0 0 0 1px rgba(117,216,209,.28),0 0 20px rgba(117,216,209,.12);border-color:rgba(117,216,209,.55)}
+@media (max-width:720px){
+  .composer-send-tools{gap:7px}.composer-stop-button span{display:none}.composer-stop-button{width:40px;padding:8px}
+}

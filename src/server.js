@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { invokeTool, getPolicy } from './bridge.js';
 import { adapterStatus } from './inneros-adapter.js';
-import { copilotStatus } from './copilot.js';
+import { askInnerOSCopilot, copilotStatus } from './copilot.js';
 import { dmxStatus } from './dmx-bridge.js';
 import { TOOL_NAMES } from './webmcp.js';
 import {
@@ -32,6 +32,7 @@ const CODE_EXTENSIONS = new Set([
 ]);
 
 function json(res, status, body, extraHeaders = {}) {
+  if (res.destroyed || res.writableEnded) return;
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -67,6 +68,17 @@ function proofFor(tool, result, requestId, latencyMs) {
     serverAt: new Date().toISOString(),
     latencyMs
   };
+}
+
+function mergeAbortSignals(...signals) {
+  const active = signals.filter(Boolean);
+  if (!active.length) return undefined;
+  if (active.some((signal) => signal.aborted)) return AbortSignal.abort();
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(active);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  for (const signal of active) signal.addEventListener('abort', abort, { once: true });
+  return controller.signal;
 }
 
 function safeProjectId(value = '') {
@@ -196,7 +208,8 @@ const staticFiles = new Map([
   ['/login.js',['login.js','text/javascript; charset=utf-8']],
   ['/app.js',['app.js','text/javascript; charset=utf-8']],
   ['/webmcp.js',['../src/webmcp.js','text/javascript; charset=utf-8']],
-  ['/styles.css',['styles.css','text/css; charset=utf-8']]
+  ['/styles.css',['styles.css','text/css; charset=utf-8']],
+  ['/dmx-ux.js',['dmx-ux.js','text/javascript; charset=utf-8']]
 ]);
 
 const server = http.createServer(async (req, res) => {
@@ -214,7 +227,7 @@ const server = http.createServer(async (req, res) => {
         adapter: adapterStatus(),
         copilot: copilotStatus(),
         dmx: dmxStatus(),
-        developmentWorkspace: { projectCreate: true, attachments: true, voiceClient: true }
+        developmentWorkspace: { projectCreate: true, attachments: true, voiceClient: true, cancelableCopilot: true }
       });
     }
 
@@ -240,6 +253,32 @@ const server = http.createServer(async (req, res) => {
       if (!auth.ok) return json(res, 401, { ok: false, state: 'rejected', error: auth.error || 'unauthorized' });
       const result = await transcribeVoice(await readJson(req, MAX_UPLOAD_BODY));
       return json(res, result.ok ? 200 : 503, result);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/copilot/ask') {
+      if (!auth.ok) return json(res, 401, { ok: false, state: 'rejected', error: auth.error || 'unauthorized' });
+      const body = await readJson(req, 80000);
+      const requestId = `wmcp_req_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+      const started = Date.now();
+      const clientController = new AbortController();
+      const abortOnDisconnect = () => {
+        if (!res.writableEnded) clientController.abort('client_disconnected');
+      };
+      res.once('close', abortOnDisconnect);
+      const fetchImpl = (targetUrl, options = {}) => fetch(targetUrl, {
+        ...options,
+        signal: mergeAbortSignals(options.signal, clientController.signal)
+      });
+      const result = await askInnerOSCopilot(body, { fetchImpl });
+      res.off('close', abortOnDisconnect);
+      if (clientController.signal.aborted || res.destroyed || res.writableEnded) return;
+      const latencyMs = Date.now() - started;
+      const proof = proofFor('ask_inneros_copilot', result, requestId, latencyMs);
+      return json(res, result.ok ? 200 : 409, { ...result, proof }, {
+        'x-inneros-request-id': requestId,
+        'x-inneros-adapter': proof.backend,
+        'server-timing': `inneros;dur=${latencyMs}`
+      });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/context/upload') {
@@ -309,6 +348,7 @@ const server = http.createServer(async (req, res) => {
 
     return json(res, 404, { ok: false, error: 'not_found' });
   } catch (error) {
+    if (res.destroyed || res.writableEnded) return;
     return json(res, error?.message === 'body_too_large' ? 413 : 400, {
       ok: false,
       state: 'rejected',
@@ -324,7 +364,6 @@ server.listen(PORT, '0.0.0.0', () => {
   }
   console.log(`InnerOS WebMCP listening on http://0.0.0.0:${PORT}`);
 });
-
 
 async function transcribeVoice(body = {}) {
   const encoded = String(body.dataBase64 || '');

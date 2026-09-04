@@ -132,6 +132,28 @@ test('visible WebMCP count is normalized to the current 13-tool surface', () => 
 
 
 test('public browser bundle remains syntactically valid after composer polish', () => {
-  const parseable = app.replace(/^import\s+[^;]+;\s*/m, '');
+  const parseable = app.replace(/^import\s+[^;]+;\s*/gm, '');
   assert.doesNotThrow(() => new Function(parseable));
+});
+
+
+test('recording build exposes true cancelable local Copilot generation', () => {
+  assert.match(app, /stopGenerationBtn/);
+  assert.match(app, /recordingFinalCopilotController/);
+  assert.match(app, /\/api\/copilot\/ask/);
+  assert.match(app, /abort\('user_cancelled'\)/);
+  assert.match(serverSource, /cancelableCopilot: true/);
+  assert.match(serverSource, /mergeAbortSignals/);
+  assert.match(serverSource, /clientController\.abort\('client_disconnected'\)/);
+  assert.match(serverSource, /askInnerOSCopilot\(body, \{ fetchImpl \}\)/);
+});
+
+test('recording build selects a better browser voice and preserves playback controls', () => {
+  assert.match(app, /recordingFinalBestVoice/);
+  assert.match(app, /natural\|neural\|online/);
+  assert.match(app, /utterance\.voice = voice/);
+  assert.match(app, /utterance\.rate = 1\.02/);
+  assert.match(app, /Play last local model response/);
+  assert.match(app, /Pause response audio/);
+  assert.match(css, /Recording-final stop control/);
 });

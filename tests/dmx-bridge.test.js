@@ -128,3 +128,22 @@ test('dmx create scene registers a structured scene without physical execution',
   assert.equal(body.name, 'aurora_pulse');
   assert.deepEqual(result.supportedScenes, ['rainbow', 'aurora_pulse', 'blackout']);
 });
+
+
+test('dmx status exposes human scene catalog from dynamic registry', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        ok: true,
+        supported_scenes: ['rainbow', 'pulse_morado_suave', 'blackout'],
+        dynamic_scenes: { pulse_morado_suave: { label: 'Pulse Morado Suave', dynamic: true } }
+      };
+    }
+  });
+  const result = await getDmxStatus({
+    env: { INNEROS_DMX_API_URL: 'http://127.0.0.1:18796' },
+    fetchImpl
+  });
+  assert.equal(result.sceneCatalog[1].label, 'Pulse Morado Suave');
+});

@@ -1,4 +1,5 @@
 import { installBrowserWebMCP } from '/webmcp.js';
+import { initDmxExperience, applyDmxRegistry, onSceneRegistered, renderScenePreview } from './dmx-ux.js';
 
 const $ = (id) => document.getElementById(id);
 const traceEl = $('trace');
@@ -188,25 +189,6 @@ async function invoke(name, input = {}, { trace = true } = {}) {
   return data;
 }
 
-
-function formatDmxSceneLabel(scene = '') {
-  return String(scene).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-async function refreshDmxSceneSelector(supportedScenes = []) {
-  const select = $('dmxScene');
-  if (!select || !Array.isArray(supportedScenes) || !supportedScenes.length) return;
-  const selectable = supportedScenes.filter((scene) => scene && scene !== 'blackout');
-  if (!selectable.length) return;
-  const current = select.value;
-  select.replaceChildren(...selectable.map((scene) => {
-    const option = document.createElement('option');
-    option.value = scene;
-    option.textContent = formatDmxSceneLabel(scene);
-    return option;
-  }));
-  if (selectable.includes(current)) select.value = current;
-}
 
 function bubble(role, label, message) {
   const article = document.createElement('article');
@@ -506,7 +488,7 @@ async function boot() {
     if (health.dmx?.configured) {
       try {
         const dmx = await invoke('dmx_status', {});
-        if (dmx.ok) await refreshDmxSceneSelector(dmx.supportedScenes || []);
+        if (dmx.ok) applyDmxRegistry(dmx);
       } catch { /* non-fatal boot refresh */ }
     }
     setFlowStage('archHuman', { confirmed: true });
@@ -524,23 +506,7 @@ $('logoutBtn')?.addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.replace('/login.html');
 });
-$('dmxStatusBtn')?.addEventListener('click', async () => {
-  const data = await invoke('dmx_status', {});
-  $('dmxState').textContent = data.ok ? `AG-59 ready · ${data.fixtureCount || 9} fixtures · effect ${data.currentEffect || 'idle'}` : `DMX unavailable · ${data.error || 'unknown'}`;
-  if (data.ok) await refreshDmxSceneSelector(data.supportedScenes || []);
-  bubble('assistant', 'AG-59 DMX', data.ok ? `Stage status: ${data.running ? 'running' : 'idle'}. Supported scenes: ${(data.supportedScenes || []).join(', ')}.` : `DMX unavailable: ${data.error || 'engine offline'}`);
-});
-$('dmxSceneBtn')?.addEventListener('click', async () => {
-  const scene = $('dmxScene')?.value || 'rainbow';
-  const data = await invoke('dmx_set_scene', { scene });
-  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? `Applied scene ${scene}.` : `Scene blocked: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = `AG-59 applied · ${scene}`;
-});
-$('dmxBlackoutBtn')?.addEventListener('click', async () => {
-  const data = await invoke('dmx_blackout', {});
-  bubble(data.ok ? 'assistant' : 'error', 'AG-59 DMX', data.ok ? 'Blackout applied.' : `Blackout failed: ${data.error || data.state}`);
-  if (data.ok) $('dmxState').textContent = 'AG-59 blackout applied';
-});
+// DMX controls: initDmxExperience()
 $('refreshEvidence').addEventListener('click', () => refreshEvidence({ silent: false }));
 $('clearTrace').addEventListener('click', () => {
   traceEl.replaceChildren();
@@ -550,6 +516,7 @@ $('clearTrace').addEventListener('click', () => {
   traceEl.append(empty);
 });
 
+initDmxExperience({ invoke, bubble, addTrace });
 boot();
 
 
@@ -671,7 +638,7 @@ async function pollDmxRegistry() {
     if (!fingerprint) return;
     const changed = Boolean(dmxRegistryFingerprint) && fingerprint !== dmxRegistryFingerprint;
     dmxRegistryFingerprint = fingerprint;
-    await refreshDmxSceneSelector(scenes);
+    applyDmxRegistry({ ok: true, supportedScenes: scenes, sceneCatalog: data?.sceneCatalog || [] });
 
     if (changed) {
       addTrace({
@@ -717,7 +684,7 @@ async function interceptDmxSceneCreation(event) {
     const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
     resultEl.textContent = JSON.stringify(data, null, 2);
     if (data.ok) {
-      await refreshDmxSceneSelector(data.supportedScenes || []);
+      onSceneRegistered(data);
       const select = $('dmxScene');
       if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
       $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -876,7 +843,7 @@ async function autoRegisterDmxSceneIfEligible() {
     const data = await invoke('dmx_create_scene', { description: prompt });
     resultEl.textContent = JSON.stringify(data, null, 2);
     if (data.ok) {
-      await refreshDmxSceneSelector(data.supportedScenes || []);
+      onSceneRegistered(data);
       const select = $('dmxScene');
       if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
       $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -998,7 +965,7 @@ async function approvedExecutePlan(event) {
       const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
       resultEl.textContent = JSON.stringify(data, null, 2);
       if (data.ok) {
-        await refreshDmxSceneSelector(data.supportedScenes || []);
+        onSceneRegistered(data);
         const select = $('dmxScene');
         if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
         $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -1278,7 +1245,7 @@ async function approvedExecuteWithContext() {
       const data = await invoke('dmx_create_scene', { description: lastCopilotPrompt });
       resultEl.textContent = JSON.stringify(data, null, 2);
       if (data.ok) {
-        await refreshDmxSceneSelector(data.supportedScenes || []);
+        onSceneRegistered(data);
         const select = $('dmxScene');
         if (select && [...select.options].some((option) => option.value === data.scene)) select.value = data.scene;
         $('dmxState').textContent = `AG-59 registered · ${data.scene}`;
@@ -1844,3 +1811,228 @@ conversationalAskCopilot = async function polishedConversationalAskCopilot() {
 
 window.setTimeout(() => installChatComposerPolish(), 150);
 window.addEventListener('beforeunload', stopLocalResponseAudio);
+
+
+// Recording-final interaction pass: true client->server->vLLM cancellation and better reply voice selection.
+let recordingFinalCopilotController = null;
+
+function recordingFinalSetBusy(busy) {
+  updateSendVisual(busy);
+  const send = $('askCopilot');
+  const stop = $('stopGenerationBtn');
+  if (send) send.hidden = busy;
+  if (stop) {
+    stop.hidden = !busy;
+    stop.disabled = !busy;
+  }
+  const hint = $('sendHint');
+  if (hint) hint.textContent = busy ? 'Local Qwen is responding · Stop cancels the request' : 'Enter to send · Shift+Enter for a new line';
+}
+
+function stopActiveCopilotGeneration() {
+  if (!recordingFinalCopilotController) return;
+  recordingFinalCopilotController.abort('user_cancelled');
+  recordingFinalCopilotController = null;
+  recordingFinalSetBusy(false);
+  setNativeActionHint('GENERATION STOPPED · no execution occurred', 'info');
+  addTrace({
+    title: 'Local Qwen generation stopped',
+    detail: 'The browser cancelled the active Copilot HTTP request. The server closes the linked vLLM fetch when the client disconnects.',
+    state: 'cancelled', source: 'BROWSER', confirmed: false, backend: 'local_vllm'
+  });
+}
+
+async function recordingFinalCopilotRequest(payload, signal) {
+  setFlowStage('archWebmcp');
+  addTrace({
+    title: 'Tool request · ask_inneros_copilot',
+    detail: { project: payload.project, message: short(payload.message, 90), cancelable: true },
+    state: 'info', source: 'BROWSER', confirmed: false
+  });
+  const started = performance.now();
+  const response = await fetch('/api/copilot/ask', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal
+  });
+  const clientLatencyMs = Math.round(performance.now() - started);
+  let data;
+  try { data = await response.json(); }
+  catch { data = { ok: false, state: 'error', error: 'invalid_backend_json' }; }
+  const proof = updateProof(data, response, clientLatencyMs);
+  setFlowStage('archBridge', { confirmed: Boolean(data?.ok), degraded: !data?.ok });
+  addTrace({
+    title: `ask_inneros_copilot · ${data.state || (data.ok ? 'ok' : 'error')}`,
+    detail: data.error || data.message || 'Local model response received.',
+    state: data.ok ? (data.state || 'ok') : (data.state || 'blocked'),
+    source: 'BACKEND', confirmed: true,
+    requestId: proof.requestId, latencyMs: proof.latencyMs, backend: proof.backend || 'local_vllm'
+  });
+  window.setTimeout(settleFlow, 900);
+  return data;
+}
+
+conversationalAskCopilot = async function recordingFinalConversationalAskCopilot() {
+  const prompt = $('copilotPrompt')?.value?.trim() || '';
+  if (!prompt || recordingFinalCopilotController) return;
+  stopLocalResponseAudio();
+  const project = $('project')?.value?.trim() || 'inneros-webmcp';
+  const history = conversationHistoryForModel();
+  const context = contextText();
+  lastCopilotPrompt = prompt;
+  lastExecutionBrief = '';
+  $('executePlan').disabled = true;
+  bubble('user', 'YOU', prompt);
+  $('copilotPrompt').value = '';
+  autoGrowComposer();
+  const controller = new AbortController();
+  recordingFinalCopilotController = controller;
+  recordingFinalSetBusy(true);
+  setFlowStage('archHuman', { confirmed: true });
+  window.setTimeout(() => setFlowStage('archWebmcp'), 120);
+  try {
+    const data = await recordingFinalCopilotRequest({ project, message: prompt, history, context }, controller.signal);
+    if (controller.signal.aborted) return;
+    if (data.ok) {
+      bubble('assistant', `${data.provider || 'LOCAL AMD'} · ${data.model || 'QWEN3-CODER'} · ${data.backend || 'local_vllm'}`, data.message);
+      lastLocalModelReply = String(data.message || '');
+      syncResponseAudioButtons();
+      const casual = isCasualPrompt(prompt);
+      lastExecutionBrief = casual ? '' : (data.executionBrief || prompt);
+      $('executePlan').disabled = casual;
+      $('modelLabel').textContent = `${data.provider || 'Local AMD'} · ${data.runtime || 'vLLM'}`;
+      $('copilotBadge').textContent = `Local Qwen3-Coder · ${data.historyTurnsUsed || 0} prior turns · ${data.contextCharsUsed || 0} context chars`;
+      $('copilotBadge').classList.add('ok');
+      if (!casual) setNativeActionHint('PLAN READY · keep refining in chat, then Approve & Execute when satisfied. Nothing has executed.', 'info');
+    } else {
+      bubble('error', 'COPILOT ERROR', data.error || 'Local model unavailable.');
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError' || controller.signal.aborted) {
+      bubble('assistant', 'LOCAL AMD · QWEN3-CODER', 'Generation stopped. Nothing was executed.');
+    } else {
+      bubble('error', 'COPILOT ERROR', error.message || 'Request failed.');
+      addTrace({ title: 'Copilot request failed', detail: error.message || 'Request failed.', state: 'error', source: 'BROWSER', confirmed: false });
+    }
+  } finally {
+    if (recordingFinalCopilotController === controller) recordingFinalCopilotController = null;
+    recordingFinalSetBusy(false);
+  }
+};
+
+function recordingFinalVoiceScore(voice, lang) {
+  const voiceLang = String(voice.lang || '').toLowerCase();
+  const target = String(lang || '').toLowerCase();
+  const targetBase = target.split('-')[0];
+  const name = String(voice.name || '').toLowerCase();
+  let score = 0;
+  if (voiceLang === target) score += 100;
+  else if (voiceLang.startsWith(`${targetBase}-`) || voiceLang === targetBase) score += 70;
+  if (/natural|neural|online/.test(name)) score += 30;
+  if (/microsoft|google|apple/.test(name)) score += 14;
+  if (/sabina|paulina|monica|dalia|helena|jenny|aria|guy|ana|jorge/.test(name)) score += 18;
+  if (voice.default) score += 5;
+  return score;
+}
+
+function recordingFinalBestVoice(lang) {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  return voices.slice().sort((a, b) => recordingFinalVoiceScore(b, lang) - recordingFinalVoiceScore(a, lang))[0] || null;
+}
+
+function recordingFinalReplyLanguage(text = '') {
+  const sample = String(text).toLowerCase();
+  const spanishHits = (sample.match(/\b(el|la|los|las|de|que|para|con|una|un|por|como|puede|proyecto|modelo|respuesta)\b/g) || []).length;
+  return spanishHits >= 3 || /[áéíóúñ¿¡]/i.test(sample) ? 'es-EC' : 'en-US';
+}
+
+syncResponseAudioButtons = function recordingFinalSyncResponseAudioButtons() {
+  const play = $('playResponseBtn');
+  const stop = $('stopResponseBtn');
+  const supported = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+  const speaking = Boolean(window.speechSynthesis?.speaking);
+  const paused = Boolean(window.speechSynthesis?.paused);
+  if (play) {
+    play.disabled = !supported || !lastLocalModelReply;
+    play.classList.toggle('active', speaking && !paused);
+    play.setAttribute('aria-label', speaking ? (paused ? 'Resume response audio' : 'Pause response audio') : 'Play last local model response');
+    play.title = speaking ? (paused ? 'Resume response audio' : 'Pause response audio') : 'Play last local model response';
+  }
+  if (stop) {
+    stop.disabled = !supported || !speaking;
+    stop.title = speaking ? 'Stop response audio' : 'No response audio is playing';
+  }
+};
+
+playOrPauseLocalResponse = function recordingFinalPlayOrPauseLocalResponse() {
+  if (!lastLocalModelReply || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+  const synth = window.speechSynthesis;
+  if (synth.speaking) {
+    if (synth.paused) synth.resume();
+    else synth.pause();
+    syncResponseAudioButtons();
+    return;
+  }
+  const spoken = lastLocalModelReply
+    .replace(/\n?EXECUTION BRIEF:[\s\S]*$/i, '')
+    .replace(/[`*_#]/g, '')
+    .replace(/https?:\/\/\S+/g, 'link')
+    .trim()
+    .slice(0, 6000);
+  if (!spoken) return;
+  const lang = recordingFinalReplyLanguage(spoken);
+  const utterance = new SpeechSynthesisUtterance(spoken);
+  const voice = recordingFinalBestVoice(lang);
+  utterance.lang = voice?.lang || lang;
+  if (voice) utterance.voice = voice;
+  utterance.rate = 1.02;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  utterance.onstart = () => {
+    syncResponseAudioButtons();
+    if ($('attachmentState')) $('attachmentState').textContent = `Reading model reply${voice ? ` · ${voice.name}` : ''}`;
+  };
+  utterance.onpause = syncResponseAudioButtons;
+  utterance.onresume = syncResponseAudioButtons;
+  utterance.onend = () => {
+    localReplyUtterance = null;
+    syncResponseAudioButtons();
+    if ($('attachmentState')) $('attachmentState').textContent = 'Reply audio finished · Local Whisper remains ready for dictation';
+  };
+  utterance.onerror = () => {
+    localReplyUtterance = null;
+    syncResponseAudioButtons();
+  };
+  localReplyUtterance = utterance;
+  synth.cancel();
+  synth.speak(utterance);
+  syncResponseAudioButtons();
+};
+
+function installRecordingFinalControls(attempt = 0) {
+  const sendTools = document.querySelector('.composer-send-tools');
+  const send = $('askCopilot');
+  if (!sendTools || !send) {
+    if (attempt < 20) window.setTimeout(() => installRecordingFinalControls(attempt + 1), 75);
+    return;
+  }
+  if (!$('stopGenerationBtn')) {
+    const stop = document.createElement('button');
+    stop.id = 'stopGenerationBtn';
+    stop.type = 'button';
+    stop.className = 'composer-stop-button';
+    stop.hidden = true;
+    stop.disabled = true;
+    stop.setAttribute('aria-label', 'Stop local model generation');
+    stop.title = 'Stop local model generation';
+    stop.innerHTML = `${composerIcons.stop}<span>Stop</span>`;
+    stop.addEventListener('click', stopActiveCopilotGeneration);
+    sendTools.insertBefore(stop, send);
+  }
+  recordingFinalSetBusy(Boolean(recordingFinalCopilotController));
+  window.speechSynthesis?.getVoices?.();
+  window.speechSynthesis?.addEventListener?.('voiceschanged', syncResponseAudioButtons, { once: true });
+}
+
+window.setTimeout(() => installRecordingFinalControls(), 230);
