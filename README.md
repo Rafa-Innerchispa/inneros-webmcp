@@ -1,5 +1,16 @@
 # InnerOS WebMCP
 
+<!-- INNEROS-NARRATIVE:START -->
+> **InnerOS role:** Product Surface / R&D Validation  
+> **Lifecycle:** Active  
+> **Lineage:** WebMCP Challenge work exposing a public-safe browser control surface over the private InnerOS execution fabric.
+>
+> WebMCP is the governed browser-facing interface for local AI, project workspaces, execution lanes, evidence, and bounded physical controls.
+>
+> **InnerOS principle:** hackathons are validation environments. Reusable capabilities are extracted into maintained products and platform layers rather than treated as disconnected one-off projects.
+<!-- INNEROS-NARRATIVE:END -->
+
+
 Agent-native development, orchestration, evidence, and physical-control plane for the OpenAI WebMCP Challenge.
 
 ## What it does
